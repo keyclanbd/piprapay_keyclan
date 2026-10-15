@@ -4,7 +4,7 @@
     $settings = pp_get_plugin_setting($plugin_slug);
 ?>
 
-<form id="smtpSettingsForm" method="post" action="">
+<form id="smtpSettingsForm" method="post" action="" enctype="multipart/form-data">
     <!-- Page Header -->
     <div class="page-header">
       <div class="row align-items-end">
@@ -30,7 +30,7 @@
                 
                 <div class="row mb-4">
                   <div class="col-sm-6">
-                    <label for="host" class="col-sm-12 col-form-label form-label">Name</label>
+                    <label for="name" class="col-sm-12 col-form-label form-label">Name</label>
                     <div class="input-group">
                         <input type="text" class="form-control" name="name" id="name" value="<?= htmlspecialchars($settings['name'] ?? $plugin_info['plugin_name']) ?>" readonly>
                     </div>
@@ -96,7 +96,7 @@
                   </div>
                   
                   <div class="col-sm-6">
-                    <label for="status" class="col-sm-12 col-form-label form-label">Category</label>
+                    <label for="category" class="col-sm-12 col-form-label form-label">Category</label>
                     <div class="input-group">
                       <input type="text" class="form-control" name="category" id="category" value="Mobile Banking" readonly>
                     </div>
@@ -125,11 +125,25 @@
             <div class="card-body">
                 <div class="row mb-4">
                   <div class="col-sm-6">
+                    <label for="account_name" class="col-sm-12 col-form-label form-label">Account Name</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="account_name" id="account_name" value="<?= htmlspecialchars($settings['account_name'] ?? '') ?>" placeholder="Enter account name">
+                    </div>
+                    <div class="text-secondary mt-2">The name shown as the payment recipient.</div>
+                  </div>
+
+                  <div class="col-sm-6">
                     <label for="payment_number" class="col-sm-12 col-form-label form-label">Number</label>
                     <div class="input-group">
                         <input type="text" class="form-control" name="payment_number" id="payment_number" value="<?= htmlspecialchars($settings['payment_number'] ?? '') ?>">
                     </div>
                     <div class="text-secondary mt-2"> </div>
+                  </div>
+
+                  <div class="col-sm-6">
+                    <label for="qr_code" class="col-sm-12 col-form-label form-label">QR Code</label>
+                    <input type="file" class="form-control" name="qr_code" id="qr_code" accept="image/png,image/jpeg,image/webp">
+                    <?php if (!empty($settings['qr_code'])): ?><img src="<?php echo htmlspecialchars($settings['qr_code']); ?>" alt="QR Code" style="max-width:120px;margin-top:10px;border-radius:8px"><?php endif; ?>
                   </div>
 
                   <div class="col-sm-6">
@@ -169,19 +183,22 @@
             $.ajax({
                 url: $(this).attr('action'),
                 type: 'POST',
-                data: $(this).serialize(),
+                data: new FormData(this),
+                processData: false,
+                contentType: false,
                 dataType: 'json',
                 success: function(response) {
                     document.querySelector(".btn-primary-add").innerHTML = 'Save Settings';
                     
                     if(response.status) {
-                        $('#ajaxResponse').addClass('alert alert-success mb-3').html(response.message);
+                        $('#ajaxResponse').removeClass('alert-danger').addClass('alert alert-success mb-3').html(response.message);
                     } else {
-                        $('#ajaxResponse').addClass('alert alert-danger mb-3').html(response.message);
+                        $('#ajaxResponse').removeClass('alert-success').addClass('alert alert-danger mb-3').html(response.message);
                     }
                 },
                 error: function() {
-                    $('#ajaxResponse').addClass('alert alert-danger').html('An error occurred. Please try again.');
+                    document.querySelector(".btn-primary-add").innerHTML = 'Save Settings';
+                    $('#ajaxResponse').removeClass('alert-success').addClass('alert alert-danger').html('An error occurred. Please try again.');
                 }
             });
         });

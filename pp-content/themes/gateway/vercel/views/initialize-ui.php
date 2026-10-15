@@ -2,6 +2,26 @@
     if (!defined('pp_allowed_access')) {
         die('Direct access not allowed');
     }
+
+    $currencySymbolMap = [
+        'BDT' => '৳', 'TK' => '৳', 'TKA' => '৳',
+        'USD' => '$', 'EUR' => '€', 'GBP' => '£',
+        'INR' => '₹', 'JPY' => '¥', 'CNY' => '¥',
+        'SAR' => '﷼', 'AED' => 'د.إ', 'PKR' => '₨', 'NPR' => '₨',
+    ];
+    $pp_currency = $transaction_details['response'][0]['transaction_currency'] ?? '';
+    $pp_currency = $currencySymbolMap[strtoupper(trim($pp_currency))] ?? $pp_currency;
+    $display_amount = $transaction_details['response'][0]['transaction_amount'] + $transaction_details['response'][0]['transaction_fee'];
+    $display_currency = $pp_currency;
+    $display_gateway = null;
+    foreach (pp_get_gateway_category_tabs($payment_id) as $gateway_tab) {
+        foreach (($gateway_tab['gateways']['response'] ?? []) as $gateway_option) {
+            if (($gateway_option['is_available'] ?? true) === true) {
+                $display_gateway = $gateway_option;
+                break 2;
+            }
+        }
+    }
 ?>
 
 <!DOCTYPE html>
@@ -10,7 +30,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Checkout - <?php echo $setting['response'][0]['site_name']?></title>
-    <link rel="icon" type="image/x-icon" href="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'https://cdn.piprapay.com/media/favicon.png';}else{echo $setting['response'][0]['favicon'];};}else{echo 'https://cdn.piprapay.com/media/favicon.png';}?>">
+    <link rel="icon" type="image/x-icon" href="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $setting['response'][0]['favicon'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>">
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -456,6 +476,16 @@
         .grid-box:hover {
           box-shadow: 0 4px 10px rgba(0,0,0,0.08);
         }
+
+        .grid-box.unavailable {
+          opacity: .48;
+          cursor: not-allowed;
+          background: #f8fafc;
+        }
+
+        .grid-box.unavailable:hover {
+          box-shadow: none;
+        }
         
         .grid-box img {
           height: 45px;
@@ -470,10 +500,23 @@
           font-size: 12px;
           border-top: 1px solid #dddddd;
           margin-top: 7px;
-          height: 35px;
+          min-height: 35px;
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
+          padding: 4px;
+          text-align: center;
+        }
+
+        .grid-box-note {
+          color: #dc2626;
+          font-size: 10px;
+          line-height: 1.2;
+        }
+
+        .grid-box.converted .grid-box-note {
+          color: <?php echo $setting['response'][0]['active_tab_color']?>;
         }
         
         @media (max-width: 767px) {
@@ -495,10 +538,10 @@
         <div class="payment-body">
             <!-- Updated Payment Amount Section -->
             <div class="payment-amount">
-                <img src="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'https://cdn.piprapay.com/media/favicon.png';}else{echo $setting['response'][0]['favicon'];};}else{echo 'https://cdn.piprapay.com/media/favicon.png';}?>" alt="Merchant Logo" class="merchant-logo">
+                <img src="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $setting['response'][0]['favicon'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>" alt="Merchant Logo" class="merchant-logo">
                 <div class="merchant-details">
                     <div class="merchant-name"><?php echo $setting['response'][0]['site_name']?></div>
-                    <div class="amount-value"><?php echo number_format($transaction_details['response'][0]['transaction_amount']+$transaction_details['response'][0]['transaction_fee'], 2).$transaction_details['response'][0]['transaction_currency']?></div>
+                    <div class="amount-value"><?php echo number_format((float)($display_gateway['amount'] ?? $display_amount), 2).' '.htmlspecialchars($display_gateway['currency'] ?? $display_currency)?></div>
                     <div class="amount-label">Invoice: <?php echo $transaction_details['response'][0]['pp_id']?></div>
                 </div>
                 <div class="payment-actions">
@@ -517,27 +560,7 @@
             <div class="payment-methods">
                 <div class="method-tabs">
                     <?php
-                        $tabs = [
-                            'mobile-banking' => [
-                                'title' => 'Mobile Banking',
-                                'gateways' => pp_get_payment_gateways('Mobile Banking', $payment_id),
-                            ],
-                            'ibanking' => [
-                                'title' => 'IBanking',
-                                'gateways' => pp_get_payment_gateways('IBanking', $payment_id),
-                            ],
-                            'international' => [
-                                'title' => 'International',
-                                'gateways' => pp_get_payment_gateways('International', $payment_id),
-                            ],
-                        ];
-                        
-                        $availableTabs = [];
-                        foreach ($tabs as $key => $tab) {
-                            if (!empty($tab['gateways']['response'])) {
-                                $availableTabs[] = $key;
-                            }
-                        }
+                        $tabs = pp_get_gateway_category_tabs($payment_id);
                     ?>
                     <?php foreach ($tabs as $key => $tab): ?>
                         <?php if (!empty($tab['gateways']['response'])): ?>
@@ -548,20 +571,31 @@
                 
                 <?php foreach ($tabs as $key => $tab): ?>
                     <?php if (!empty($tab['gateways']['response'])): ?>
+                    <?php $first_gateway = $tab['gateways']['response'][0]; ?>
                     <div class="method-content" id="<?= $key ?>">
                         <form class="card-form">
                             <div class="container" style="padding: 0px;">
                                 <div class="grid-wrapper">
                                     <?php foreach ($tab['gateways']['response'] as $gateway): ?>
-                                        <div class="grid-box" onclick="location.href='?method=<?= $gateway['plugin_slug'] ?>'">
-                                            <img src="<?= $gateway['plugin_logo'] ?>" alt="<?= $gateway['plugin_name'] ?>">
-                                            <div class="grid-box-footer"><?= $gateway['plugin_name'] ?></div>
+                                        <?php
+                                            $gatewayAvailable = ($gateway['is_available'] ?? true) === true;
+                                            $gatewayConverted = ($gateway['is_converted'] ?? false) === true;
+                                            $gatewayReason = $gateway['availability_reason'] ?? '';
+                                        ?>
+                                        <div class="grid-box<?php echo !$gatewayAvailable ? ' unavailable' : ''; ?><?php echo $gatewayConverted ? ' converted' : ''; ?>" <?php if ($gatewayAvailable): ?>onclick="location.href='?method=<?= htmlspecialchars($gateway['plugin_slug']) ?>'"<?php endif; ?> title="<?= htmlspecialchars($gatewayReason) ?>">
+                                            <img src="<?= htmlspecialchars($gateway['plugin_logo']) ?>" alt="<?= htmlspecialchars($gateway['plugin_name']) ?>">
+                                            <div class="grid-box-footer">
+                                                <span><?= htmlspecialchars($gateway['plugin_name']) ?></span>
+                                                <?php if (!$gatewayAvailable || $gatewayConverted): ?>
+                                                    <span class="grid-box-note"><?= htmlspecialchars($gatewayConverted ? 'Charged in '.($gateway['currency'] ?? '') : $gatewayReason) ?></span>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     <?php endforeach; ?>
                                 </div>
                             </div>
                             <button type="button" class="btn-pay" id="pay-button">
-                                <i class="fas fa-lock"></i> Pay <?= number_format($transaction_details['response'][0]['transaction_amount'] + $transaction_details['response'][0]['transaction_fee'], 2) . $transaction_details['response'][0]['transaction_currency'] ?>
+                                <i class="fas fa-lock"></i> Pay <?= number_format((float)($display_gateway['amount'] ?? $display_amount), 2) . ' ' . htmlspecialchars($display_gateway['currency'] ?? $display_currency) ?>
                             </button>
                         </form>
                     </div>
@@ -631,17 +665,17 @@
                             <hr class="my-2 border-secondary opacity-10">
                             <li class="d-flex justify-content-between">
                                 <span class="fw-semibold text-secondary">Amount:</span>
-                                <span class="fw-semibold" style="color:<?php echo $setting['response'][0]['global_text_color']?>"><?php echo number_format($transaction_details['response'][0]['transaction_amount'], 2).$transaction_details['response'][0]['transaction_currency']?></span>
+                                <span class="fw-semibold" style="color:<?php echo $setting['response'][0]['global_text_color']?>"><?php echo number_format($transaction_details['response'][0]['transaction_amount'], 2).' '.$pp_currency?></span>
                             </li>
                             <hr class="my-2 border-secondary opacity-10">
                             <li class="d-flex justify-content-between">
                                 <span class="text-secondary">Fee:</span>
-                                <span class="text-secondary"><?php echo number_format($transaction_details['response'][0]['transaction_fee'], 2).$transaction_details['response'][0]['transaction_currency']?></span>
+                                <span class="text-secondary"><?php echo number_format($transaction_details['response'][0]['transaction_fee'], 2).' '.$pp_currency?></span>
                             </li>
                             <hr class="my-2 border-secondary opacity-10">
                             <li class="d-flex justify-content-between">
                                 <span class="fw-semibold text-secondary">Total Payable Amount:</span>
-                                <span class="fw-semibold" style="color:<?php echo $setting['response'][0]['global_text_color']?>"><?php echo number_format($transaction_details['response'][0]['transaction_amount']+$transaction_details['response'][0]['transaction_fee'], 2).$transaction_details['response'][0]['transaction_currency']?></span>
+                                <span class="fw-semibold" style="color:<?php echo $setting['response'][0]['global_text_color']?>"><?php echo number_format($transaction_details['response'][0]['transaction_amount']+$transaction_details['response'][0]['transaction_fee'], 2).' '.$pp_currency?></span>
                             </li>
                         </ul>
                     </div>

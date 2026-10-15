@@ -1,6 +1,6 @@
 {
   "type": "plugins",
   "slug": "bkash-agent",
-  "name": "Bkash Agent",
+  "name": "bKash Agent",
   "mrdr": "payment-gateway"
 }

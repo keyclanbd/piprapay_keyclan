@@ -5,6 +5,14 @@
     
     $theme_slug = 'vercel';
     $settings = pp_get_theme_setting($theme_slug);
+    $currencySymbolMap = [
+        'BDT' => '৳', 'TK' => '৳', 'TKA' => '৳',
+        'USD' => '$', 'EUR' => '€', 'GBP' => '£',
+        'INR' => '₹', 'JPY' => '¥', 'CNY' => '¥',
+        'SAR' => '﷼', 'AED' => 'د.إ', 'PKR' => '₨', 'NPR' => '₨',
+    ];
+    $pp_currency = $transaction_details['response'][0]['transaction_currency'] ?? '';
+    $pp_currency = $currencySymbolMap[strtoupper(trim($pp_currency))] ?? $pp_currency;
 ?>
 
 <!DOCTYPE html>
@@ -13,7 +21,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Checkout - <?php echo $setting['response'][0]['site_name']?></title>
-    <link rel="icon" type="image/x-icon" href="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'https://cdn.piprapay.com/media/favicon.png';}else{echo $setting['response'][0]['favicon'];};}else{echo 'https://cdn.piprapay.com/media/favicon.png';}?>">
+    <link rel="icon" type="image/x-icon" href="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $setting['response'][0]['favicon'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>">
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -296,7 +304,7 @@
                             </div>
                             <div class="receipt-row">
                                 <span class="receipt-label">Amount:</span>
-                                <span class="receipt-value"><?php echo number_format($transaction_details['response'][0]['transaction_amount']+$transaction_details['response'][0]['transaction_fee'], 2).$transaction_details['response'][0]['transaction_currency']?></span>
+                                <span class="receipt-value"><?php echo number_format($transaction_details['response'][0]['transaction_amount']+$transaction_details['response'][0]['transaction_fee'], 2).' '.$pp_currency?></span>
                             </div>
                             <div class="receipt-row receipt-total">
                                 <span class="receipt-label">Status:</span>
@@ -328,7 +336,7 @@
                 </div>
                 <div class="detail-row">
                     <div class="detail-label">Amount Paid</div>
-                    <div class="detail-value"><?php echo number_format($transaction_details['response'][0]['transaction_amount']+$transaction_details['response'][0]['transaction_fee'], 2).$transaction_details['response'][0]['transaction_currency']?></div>
+                    <div class="detail-value"><?php echo number_format($transaction_details['response'][0]['transaction_amount']+$transaction_details['response'][0]['transaction_fee'], 2).' '.$pp_currency?></div>
                 </div>
             </div>
             

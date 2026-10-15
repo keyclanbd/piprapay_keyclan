@@ -17,7 +17,7 @@
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
-    <link rel="icon" type="image/x-icon" href="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'https://cdn.piprapay.com/media/favicon.png';}else{echo $setting['response'][0]['favicon'];};}else{echo 'https://cdn.piprapay.com/media/favicon.png';}?>">
+    <link rel="icon" type="image/x-icon" href="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $setting['response'][0]['favicon'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
@@ -409,7 +409,7 @@
     <div class="payment-container">
         <div class="payment-header">
             <div class="payment-logo">
-                <img src="<?php if(isset($setting['response'][0]['logo'])){if($setting['response'][0]['logo'] == "--"){echo 'https://cdn.piprapay.com/media/logo.png';}else{echo $setting['response'][0]['logo'];};}else{echo 'https://cdn.piprapay.com/media/logo.png';}?>" style=" height: 30px; ">
+                <img src="<?php if(isset($setting['response'][0]['logo'])){if($setting['response'][0]['logo'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $setting['response'][0]['logo'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>" style=" height: 30px; ">
             </div>
         </div>
         
@@ -436,6 +436,7 @@
             <form enctype="multipart/form-data" class="payment-form" id="card-form">
                 <input type="hidden" name="action" value="pp-invoice-payment-link">
                 <input type="hidden" name="pp-paymentid" value="<?php echo $paymentid?>">
+                <input type="text" name="website" value="" autocomplete="off" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;opacity:0;">
                 <!-- Static Fields -->
                 <div class="form-group">
                     <label class="form-label">Customer Details</label>
@@ -499,20 +500,36 @@
                 method: 'POST',
                 body: formData
             })
-            .then(res => res.text())
-            .then(data => {
-                console.log(data);
-                $("#pay-button").html('<i class="fas fa-lock"></i> Pay <?php echo number_format($payment_details['response'][0]['pl_amount'],2).$payment_details['response'][0]['pl_currency']?>');
-                $("pay-button").prop("disabled", true);
-                
-                var response = JSON.parse(data);
-
-                if (response.status === false) {
-                    $("#response").html('<div class="alert alert-danger" style="margin-top: 20px; margin-bottom: -1px;" role="alert">'+response.message+'</div>');
-                } else {
-                    $("#response").html('');
-                    location.href = response.pp_url;
+            .then(async res => {
+                const text = await res.text();
+                if (!text.trim()) {
+                    throw new Error('Empty server response');
                 }
+                return JSON.parse(text);
+            })
+            .then(response => {
+                console.log(response);
+                $("#pay-button").html('<i class="fas fa-lock"></i> Pay <?php echo number_format($payment_details['response'][0]['pl_amount'],2).$payment_details['response'][0]['pl_currency']?>');
+                $("#pay-button").prop("disabled", false);
+
+                if (response.status === false || response.status === "false") {
+                    $("#response").html('<div class="alert alert-danger" style="margin-top: 20px; margin-bottom: -1px;" role="alert">'+(response.message || 'Something went wrong. Please try again.')+'</div>');
+                    return;
+                }
+
+                if (!response.pp_url) {
+                    $("#response").html('<div class="alert alert-danger" style="margin-top: 20px; margin-bottom: -1px;" role="alert">Payment gateway did not return a redirect URL.</div>');
+                    return;
+                }
+
+                $("#response").html('');
+                location.href = response.pp_url;
+            })
+            .catch(error => {
+                console.error('Payment link checkout error:', error);
+                $("#pay-button").html('<i class="fas fa-lock"></i> Pay <?php echo number_format($payment_details['response'][0]['pl_amount'],2).$payment_details['response'][0]['pl_currency']?>');
+                $("#pay-button").prop("disabled", false);
+                $("#response").html('<div class="alert alert-danger" style="margin-top: 20px; margin-bottom: -1px;" role="alert">Server returned an invalid response. Please try again.</div>');
             });
         });
     </script>

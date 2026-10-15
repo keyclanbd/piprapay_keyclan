@@ -1,648 +1,532 @@
 <?php
     $transaction_details = pp_get_transation($payment_id);
     $setting = pp_get_settings();
-    $faq_list = pp_get_faq();
-    $support_links = pp_get_support_links();
-
     $plugin_slug = 'bap-bank';
     $plugin_info = pp_get_plugin_info($plugin_slug);
     $settings = pp_get_plugin_setting($plugin_slug);
-    
+
     $transaction_amount = convertToDefault($transaction_details['response'][0]['transaction_amount'], $transaction_details['response'][0]['transaction_currency'], $settings['currency']);
     $transaction_fee = safeNumber($settings['fixed_charge']) + ($transaction_amount * (safeNumber($settings['percent_charge']) / 100));
-    $transaction_amount = $transaction_amount+$transaction_fee;
-    
-    if(isset($_POST['bap-bank'])){
-        if(pp_set_transaction_byslip($payment_id, $plugin_slug, $plugin_info['plugin_name'], $_FILES['payment_slip'] ?? null, 'pending')){
+    $transaction_amount += $transaction_fee;
+    $formatted_amount = number_format($transaction_amount, 2);
+    $site_name = $setting['response'][0]['site_name'] ?? 'KeyClan';
+    $payment_link = pp_get_paymentlink($payment_id);
+    $account_name = $settings['account_name'] ?? '';
+    $account_number = $settings['account_number'] ?? '';
+    $branch_name = $settings['branch_name'] ?? '';
+    $routing_number = $settings['routing_number'] ?? '';
+
+    if (isset($_POST['bap-bank'])) {
+        if (pp_set_transaction_byslip($payment_id, $plugin_slug, $plugin_info['plugin_name'], $_FILES['payment_slip'] ?? null, 'pending')) {
             echo json_encode(["status" => "true", "message" => "Initialize Payment Slip"]);
-        }else{
-           echo json_encode(["status" => "true", "message" => "Failed to upload payment slip"]);  
+        } else {
+            echo json_encode(["status" => "false", "message" => "Failed to upload payment slip"]);
         }
         exit();
     }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $settings['display_name']?> - <?php echo $setting['response'][0]['site_name']?></title>
-    <link rel="icon" type="image/x-icon" href="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'https://cdn.piprapay.com/media/favicon.png';}else{echo $setting['response'][0]['favicon'];};}else{echo 'https://cdn.piprapay.com/media/favicon.png';}?>">
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
+    <title><?php echo htmlspecialchars($settings['display_name'] ?? 'Bank Asia Payment', ENT_QUOTES, 'UTF-8'); ?> - <?php echo htmlspecialchars($site_name, ENT_QUOTES, 'UTF-8'); ?></title>
+    <link rel="icon" type="image/x-icon" href="<?php echo htmlspecialchars($setting['response'][0]['favicon'] ?? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=', ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <style>
         :root {
-            --secondary: #00cec9;
-            --success: #00b894;
-            --danger: #d63031;
-            --warning: #fdcb6e;
-            --dark: #2d3436;
-            --light: #f5f6fa;
-            --gray: #636e72;
-            --border: #dfe6e9;
+            --ink: #102241;
+            --muted: #71809b;
+            --line: #e4eaf3;
+            --surface: #f6f8fc;
+            --blue: #0756b9;
+            --deep-blue: #063a82;
+            --red: #e52c39;
+            --green: #14885f;
         }
-        
+
+        * { box-sizing: border-box; }
+
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8f9fa;
-            color: var(--dark);
-            line-height: 1.6;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0 24px;
+            color: var(--ink);
+            background: #f2f5fa;
+            font-family: 'DM Sans', Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
         }
-        
-        .accordion-button:not(.collapsed) {
-            color: var(--bs-accordion-active-color);
-            background-color: transparent;
-            box-shadow: inset 0 calc(-1 * transparent) 0 transparent;
-        }
-        
-        .payment-container {
-            max-width: 550px;
+
+        button, input { font: inherit; }
+        button { cursor: pointer; }
+
+        .gateway {
+            width: min(620px, calc(100% - 32px));
             margin: 2rem auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
+            padding: 0 20px 24px;
+            background: #fff;
+            border-radius: 24px;
+            box-shadow: 0 14px 40px rgba(26, 26, 26, .06);
         }
-        
-        .payment-header {
-            display: flex;
-            background: var(--light);
-            border-radius: 8px;
-            padding: 1rem;
+
+        .top {
+            display: grid;
+            grid-template-columns: 42px 1fr 42px;
             align-items: center;
-            margin-top: 1.5rem;
-            margin-left: 1.5rem;
-            color: <?php echo $setting['response'][0]['global_text_color']?>;
-            margin-right: 1.5rem;
-            justify-content: space-between;
+            margin-bottom: 24px;
+            padding: 18px 20px 0;
         }
-        
-        .payment-logo {
-            font-weight: 700;
-            font-size: 1.5rem;
+
+        .back {
+            width: auto;
+            height: auto;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            border-radius: 0;
+            color: var(--muted);
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 7px;
+            font: 600 14px Inter, sans-serif;
+            line-height: 1;
         }
-        
-        .payment-logo img {
-            height: 30px;
-        }
-        
-        .merchant-info {
-            margin-top: 1rem;
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-        
-        .payment-body {
-            padding: 1.5rem;
-        }
-        
-        /* Updated Payment Amount Section */
-        .payment-amount {
-            display: flex;
-            background: var(--light);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1.5rem;
-            align-items: center;
-            position: relative;
-        }
-        
-        .merchant-logo {
-            width: 50px;
-            height: 50px;
-            border-radius: 8px;
-            object-fit: cover;
-            margin-right: 1rem;
-            background: white;
-            padding: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        
-        .merchant-details {
-            flex: 1;
-        }
-        
-        .merchant-name {
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
-        
-        .amount-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: <?php echo $setting['response'][0]['global_text_color']?>;
-        }
-        
-        .amount-label {
-            font-size: 0.8rem;
-            color: var(--gray);
-        }
-        
-        .payment-actions {
-            display: flex;
-            gap: 0.5rem;
-            position: absolute;
-            right: 1rem;
-            bottom: 1rem;
-        }
-        
-        .action-btn {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: white;
-            border: none;
-            color: var(--gray);
+
+        .back i { font-size: 18px; }
+
+        .top .bank-logo { justify-self: center; }
+        .top > span { display: block; }
+
+        .bank-logo {
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
-        
-        .action-btn:hover {
-            background: <?php echo $setting['response'][0]['active_tab_color']?>;
-            color: <?php echo $setting['response'][0]['active_tab_text_color']?>;
-            transform: translateY(-2px);
-        }
-        
-        .action-btn i {
-            font-size: 0.8rem;
-        }
-        
-        .method-tabs {
-            display: flex;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
-        }
-        
-        .method-tab {
-            padding: 0.75rem 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-        }
-        
-        .method-tab.active {
-            border-bottom-color: <?php echo $setting['response'][0]['active_tab_color']?>;
-            color: <?php echo $setting['response'][0]['active_tab_color']?>;
-        }
-        
-        .method-content {
-            display: none;
-        }
-        
-        .method-content.active {
+
+        .bank-logo-image {
             display: block;
-        }
-        
-        .card-form .form-group {
-            margin-bottom: 1rem;
-        }
-        
-        .form-label {
-            font-size: 0.85rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            display: block;
-        }
-        
-        .form-control {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: all 0.2s;
-        }
-        
-        .form-control:focus {
-            border-color: <?php echo $setting['response'][0]['global_text_color']?>;
-            box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
-            outline: none;
-        }
-        
-        .card-icons {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }
-        
-        .card-icon {
-            width: 40px;
-            height: 25px;
+            width: auto;
+            height: 48px;
+            max-width: 170px;
             object-fit: contain;
-            opacity: 0.3;
-            transition: opacity 0.2s;
         }
-        
-        .card-icon.active {
-            opacity: 1;
+
+        .card {
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            background: #fff;
+            box-shadow: 0 14px 40px rgba(26, 26, 26, .06);
         }
-        
-        .row {
-            display: flex;
-            gap: 1rem;
+
+        .amount {
+            position: relative;
+            overflow: hidden;
+            min-height: 116px;
+            padding: 20px 30px;
+            border-radius: 16px 16px 0 0;
+            border-bottom: 0;
+            color: #fff;
+            background: radial-gradient(circle at 85% 50%, rgba(255, 255, 255, .16), transparent 45%), linear-gradient(90deg, #0756b9 0%, #0a70c8 60%, #0752af 100%);
+            box-shadow: none;
         }
-        
-        .col {
-            flex: 1;
-        }
-        
-        .btn-pay {
-            width: 100%;
-            padding: 1rem;
-            background: <?php echo $setting['response'][0]['primary_button_color']?>;
-            color: <?php echo $setting['response'][0]['button_text_color']?>;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-        
-        .btn-pay:hover {
-            background: <?php echo $setting['response'][0]['button_hover_color']?>;
-            color: <?php echo $setting['response'][0]['button_hover_text_color']?>;
-            transform: translateY(-1px);
-        }
-        
-        .btn-pay:active {
-            transform: translateY(0);
-        }
-        
-        .upi-form {
-            text-align: center;
-        }
-        
-        .upi-id {
-            background: var(--light);
-            border-radius: 8px;
-            padding: 1rem;
-            font-weight: 500;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-        
-        .qr-code {
-            width: 200px;
-            height: 200px;
-            margin: 1rem auto;
-            background: #f0f0f0;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--gray);
-        }
-        
-        .netbanking-form select {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        .payment-footer {
-            padding: 1rem 1.5rem;
-            border-top: 1px solid var(--border);
-            font-size: 0.8rem;
-            color: var(--gray);
-            text-align: center;
-        }
-        
-        .secure-badge {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }
-        
-        .processing {
-            display: none;
-            text-align: center;
-            padding: 2rem;
-        }
-        
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            border-left-color: <?php echo $setting['response'][0]['global_text_color']?>;
+
+        .amount::after {
+            position: absolute;
+            right: -20px;
+            top: 50%;
+            width: 145px;
+            height: 145px;
+            content: '';
+            border: 1px solid rgba(255, 255, 255, .2);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
+            box-shadow: 0 0 0 20px rgba(255, 255, 255, .05), 0 0 0 42px rgba(255, 255, 255, .035);
+            transform: translateY(-50%);
         }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        @media (max-width: 576px) {
-            .payment-container {
-                margin: 0;
-                border-radius: 0;
-                min-height: 100vh;
-            }
-            
-            .payment-amount {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .merchant-logo {
-                margin-right: 0;
-                margin-bottom: 1rem;
-            }
-            
-            .payment-actions {
-                position: static;
-                margin-top: 1rem;
-                align-self: flex-end;
-            }
-        }
-                
-        .custom-contact-grid {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 16px;
-        }
-        .contact-box {
-          flex: 1 1 calc(50% - 8px);
-          text-decoration: none;
-        }
-        .contact-inner {
-          display: flex;
-          align-items: center;
-          padding: 16px;
-          background: #f8f9fa;
-          border-radius: 12px;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-          transition: 0.3s;
-        }
-        .contact-inner:hover {
-          background-color: #e2e6ea;
-        }
-        .contact-inner img {
-          width: 28px;
-          height: 28px;
-          margin-right: 12px;
-        }
-        .contact-inner span {
-          font-size: 14px;
-          color: #212529;
-        }
-        @media (max-width: 767px) {
-          .contact-box {
-            flex: 1 1 100%;
-          }
-        }
-        .list-unstyled{
-            border: 1px solid #dddddd;
-            border-radius: 8px;
-            padding: 19px;
-        }
-        .list-unstyled li{
-            height: 40px;
-            font-size: 15px;
+
+        .eyebrow {
+            position: relative;
+            z-index: 1;
+            display: flex;
             align-items: center;
+            gap: 9px;
+            margin: 0;
+            font-size: 13px;
+            font-weight: 600;
+            opacity: .85;
         }
-        .list-unstyled li button{
-            font-size: 10px;
+
+        .price {
+            position: relative;
+            z-index: 1;
+            margin-top: 4px;
+            font-size: 36px;
+            font-weight: 800;
+            letter-spacing: -1.5px;
         }
-        
-        .bg-primary{
-            background-color: <?php echo hexToRgba($setting['response'][0]['global_text_color'], 0.1);?> !important;
+
+        .main {
+            margin-top: 0;
+            padding: 30px;
+            border-top: 0;
+            border-radius: 0 0 16px 16px;
+            box-shadow: 0 14px 40px rgba(26, 26, 26, .06);
         }
-        .text-primary{
-            color: <?php echo $setting['response'][0]['global_text_color']?> !important;
+
+        .content {
+            width: 100%;
+            margin: 0;
+            padding: 0;
         }
-        
-        .btn-primary{
-            background-color: <?php echo $setting['response'][0]['primary_button_color'];?> !important;
-            border: 1px solid <?php echo $setting['response'][0]['primary_button_color'];?> !important;
-            color: <?php echo $setting['response'][0]['button_text_color'];?> !important;
+
+        .instruction {
+            margin: 0 0 26px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+            text-align: center;
+        }
+
+        .instruction strong { color: var(--ink); font-weight: 700; }
+
+        .section-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .section-heading h2 {
+            margin: 0;
+            font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+            font-size: 14px;
+            letter-spacing: -.02em;
+        }
+
+        .section-heading span {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .account-card {
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: #fff;
+        }
+
+        .account-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            min-height: 61px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .account-row:last-child { border-bottom: 0; }
+        .account-label { color: var(--muted); font-size: 13px; }
+        .account-value { display: flex; align-items: center; gap: 11px; color: var(--ink); font-size: 14px; font-weight: 700; text-align: right; }
+        .account-value .copy-button { margin-left: 8px; }
+
+        .copy-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: var(--blue);
+        }
+
+        .copy-button:hover { color: var(--deep-blue); }
+        .copy-button svg, .upload-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+
+        .upload-section { margin-top: 30px; }
+        .upload-label { display: block; margin-bottom: 10px; color: var(--ink); font-size: 13px; font-weight: 700; }
+
+        .upload-box {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 10px 14px;
+            min-height: 96px;
+            padding: 14px 16px;
+            border: 1.5px dashed #b9cae2;
+            border-radius: 16px;
+            background: #fbfcff;
+            text-align: left;
+            transition: border-color .2s, background .2s;
+        }
+
+        .upload-box:hover, .upload-box.has-file { border-color: #3e83d5; background: #f6faff; }
+        .upload-copy { display: flex; align-items: center; min-width: 0; gap: 10px; }
+        .upload-icon { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; border-radius: 10px; background: #e9f2ff; color: var(--blue); }
+        .upload-title { margin: 0; color: #263958; font-size: 13px; font-weight: 700; white-space: nowrap; }
+
+        .choose-file {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            align-self: center;
+            padding: 9px 14px;
+            border: 1px solid #b8c9e0;
+            border-radius: 9px;
+            background: #fff;
+            color: var(--blue);
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            transition: border-color .2s, background .2s;
+        }
+
+        .choose-file:hover { border-color: var(--blue); background: #f2f7ff; }
+        .file-helper { grid-column: 1; grid-row: 2; align-self: center; margin: 0 0 0 44px; color: #9aa7ba; font-size: 10px; }
+        .file-name { grid-column: 1 / -1; max-width: 100%; margin: 0; overflow: hidden; color: var(--green); font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+        .payment-id { display: none; }
+
+        .response { display: block; margin-top: 14px; }
+        .response-message { padding: 11px 13px; border-radius: 10px; background: #fff1f1; color: #b52e38; font-size: 13px; font-weight: 600; }
+
+        .verify-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            width: 100%;
+            margin-top: 18px;
+            padding: 15px 20px;
+            border: 0;
+            border-radius: 11px;
+            background: linear-gradient(105deg, #0752af, #0a70c8);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            box-shadow: 0 10px 18px rgba(7, 83, 181, .18);
+            transition: transform .2s, box-shadow .2s, filter .2s;
+        }
+
+        .verify-button:hover { filter: brightness(1.05); box-shadow: 0 13px 24px rgba(7, 83, 181, .25); transform: translateY(-1px); }
+        .verify-button:active { transform: translateY(0); }
+        .verify-button:disabled { cursor: wait; opacity: .75; transform: none; }
+
+        .security-note {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            padding: 22px 0 0;
+            color: #8390a5;
+            font-size: 11px;
+        }
+
+        .security-note svg { width: 14px; height: 14px; fill: none; stroke: #8390a5; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+
+        .gateway-footer {
+            margin-top: 22px;
+            padding: 0;
+            color: #9a9da3;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .gateway-footer strong { font-weight: 700; }
+
+        @media (max-width: 640px) {
+            body { padding: 0; }
+            .gateway { min-height: 100vh; border: 0; border-radius: 0; }
+            .top { margin-bottom: 16px; }
+            .amount { padding: 24px; }
+            .price { font-size: 32px; }
+            .bank-logo-image { height: 45px; max-width: 150px; }
+            .content { width: 100%; padding-top: 0; }
+            .account-row { align-items: flex-start; flex-direction: column; gap: 6px; padding: 13px 15px; }
+            .account-value { width: 100%; justify-content: space-between; text-align: left; }
+        }
+
+        @media (max-width: 480px) {
+            .upload-box {
+                grid-template-columns: 1fr;
+                gap: 8px;
+                min-height: auto;
+            }
+
+            .upload-copy { justify-content: center; }
+            .upload-title { white-space: normal; text-align: center; }
+            .choose-file { justify-self: center; margin-left: 0; }
+            .file-helper { grid-column: 1; margin-left: 0; text-align: center; }
         }
     </style>
 </head>
 <body>
-    <div class="payment-container">
-        <div class="payment-header">
-            <i class="fas fa-arrow-left" style=" cursor: pointer; " onclick="location.href='<?php echo pp_get_paymentlink($payment_id)?>'"></i>
-        </div>
-        
-        <div class="payment-body">
-            <!-- Updated Payment Amount Section -->
-            <center><img src="<?php echo pp_get_site_url().'/pp-content/plugins/'.$plugin_info['plugin_dir'].'/'.$plugin_slug.'/assets/icon.png';?>" style=" height: 50px; margin-bottom: 20px; "></center>
+    <main class="gateway">
+        <header class="top">
+            <button class="back" type="button" onclick="location.href='<?php echo htmlspecialchars($payment_link, ENT_QUOTES, 'UTF-8'); ?>'" aria-label="Back"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i><span>Back</span></button>
+            <div class="bank-logo" aria-label="Bank Asia">
+                <img class="bank-logo-image" src="<?php echo htmlspecialchars(pp_get_site_url().'/pp-content/plugins/payment-gateway/bap-bank/assets/icon.png', ENT_QUOTES, 'UTF-8'); ?>" alt="Bank Asia">
+            </div>
+            <span aria-hidden="true"></span>
+        </header>
 
-            <div class="payment-amount">
-                <img src="<?php if(isset($setting['response'][0]['favicon'])){if($setting['response'][0]['favicon'] == "--"){echo 'https://cdn.piprapay.com/media/favicon.png';}else{echo $setting['response'][0]['favicon'];};}else{echo 'https://cdn.piprapay.com/media/favicon.png';}?>" alt="Merchant Logo" class="merchant-logo">
-                <div class="merchant-details">
-                    <div class="merchant-name"><?php echo $setting['response'][0]['site_name']?></div>
-                    <div class="amount-value"><?php echo number_format($transaction_amount,2).' '.$settings['currency']?></div>
-                </div>
-            </div>
-            
-            <div class="payment-form">
-                  <ul class="list-unstyled">
-                    <!-- Step 1 -->
-                    <li class="d-flex">
-                      <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3" style="width: 24px; height: 24px; flex-shrink: 0;">1</div>
-                      <p class="mb-0">
-                        Bank Name: <span class="text-primary fw-semibold">Bank Asia PLC</span>
-                      </p>
-                    </li>
-                    
-                    <hr class="my-2">
-                
-                    <!-- Step 3 -->
-                    <li class="d-flex">
-                      <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3" style="width: 24px; height: 24px; flex-shrink: 0;">2</div>
-                      <p class="mb-0">
-                        Account Name: 
-                        <span class="text-primary fw-semibold bg-primary bg-opacity-10 px-2 py-1 rounded"><?php echo $settings['account_name']?></span>
-                        <button class="btn btn-primary btn-sm ms-2 px-2 py-1 d-inline-flex align-items-center btn-account_name-copy" onclick="copyText('<?php echo $settings['account_name']?>', 'btn-account_name-copy')">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-files me-1" viewBox="0 0 16 16">
-                            <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
-                          </svg>
-                          Copy
-                        </button>
-                      </p>
-                    </li>
-                    
-                    <hr class="my-2">                
-                    <!-- Step 3 -->
-                    <li class="d-flex">
-                      <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3" style="width: 24px; height: 24px; flex-shrink: 0;">3</div>
-                      <p class="mb-0">
-                        Account Number: 
-                        <span class="text-primary fw-semibold bg-primary bg-opacity-10 px-2 py-1 rounded"><?php echo $settings['account_number']?></span>
-                        <button class="btn btn-primary btn-sm ms-2 px-2 py-1 d-inline-flex align-items-center btn-account_number-copy" onclick="copyText('<?php echo $settings['account_number']?>', 'btn-account_number-copy')">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-files me-1" viewBox="0 0 16 16">
-                            <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
-                          </svg>
-                          Copy
-                        </button>
-                      </p>
-                    </li>
-                    
-                    <hr class="my-2">                
-                    <!-- Step 3 -->
-                    <li class="d-flex">
-                      <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3" style="width: 24px; height: 24px; flex-shrink: 0;">4</div>
-                      <p class="mb-0">
-                        Branch Name: 
-                        <span class="text-primary fw-semibold bg-primary bg-opacity-10 px-2 py-1 rounded"><?php echo $settings['branch_name']?></span>
-                        <button class="btn btn-primary btn-sm ms-2 px-2 py-1 d-inline-flex align-items-center btn-branch_name-copy" onclick="copyText('<?php echo $settings['branch_name']?>', 'btn-branch_name-copy')">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-files me-1" viewBox="0 0 16 16">
-                            <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
-                          </svg>
-                          Copy
-                        </button>
-                      </p>
-                    </li>
-                    
-                    <hr class="my-2">                
-                    <!-- Step 3 -->
-                    <li class="d-flex">
-                      <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3" style="width: 24px; height: 24px; flex-shrink: 0;">5</div>
-                      <p class="mb-0">
-                        Routing Number: 
-                        <span class="text-primary fw-semibold bg-primary bg-opacity-10 px-2 py-1 rounded"><?php echo $settings['routing_number']?></span>
-                        <button class="btn btn-primary btn-sm ms-2 px-2 py-1 d-inline-flex align-items-center btn-routing_number-copy" onclick="copyText('<?php echo $settings['routing_number']?>', 'btn-routing_number-copy')">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-files me-1" viewBox="0 0 16 16">
-                            <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
-                          </svg>
-                          Copy
-                        </button>
-                      </p>
-                    </li>
-                    
-                    <hr class="my-2">
-                    
-                    <!-- Step 4 -->
-                    <li class="d-flex">
-                      <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-3" style="width: 24px; height: 24px; flex-shrink: 0;">6</div>
-                      <p class="mb-0">
-                        Enter the Amount: 
-                        <span class="text-primary fw-semibold bg-primary bg-opacity-10 px-2 py-1 rounded"><?php echo number_format($transaction_amount,2).' '.$settings['currency']?></span>
-                        <button class="btn btn-primary btn-sm ms-2 px-2 py-1 d-inline-flex align-items-center btn-amount-copy" onclick="copyText('<?php echo $transaction_amount;?>', 'btn-amount-copy')">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-files me-1" viewBox="0 0 16 16">
-                            <path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/>
-                          </svg>
-                          Copy
-                        </button>
-                      </p>
-                    </li>
-                </ul>
-                
-                <div class="mb-3">
-                    <label class="form-label">Payment Slip</label>
-                    <input type="file" class="form-control payment-id" placeholder="Enter Upload Payment Slip">
-                </div>
-                
-                <span class="response"></span>
-                
-                <button class="btn-pay">Submit</button>
-            </div>
-            
-            
-        </div>
-        
-        <div class="payment-footer">
-            <div>Your payment is secured with 256-bit encryption</div>
-            <div class="secure-badge">
-                <span>Powered by <a href="https://piprapay.com/" target="blank" style="color: <?php echo $setting['response'][0]['global_text_color']?>; text-decoration: none"><strong style="cursor: pointer">PipraPay</strong></a></span>
-            </div>
-        </div>
-    </div>
+        <section class="card amount">
+            <div class="eyebrow">Amount to Pay</div>
+            <div class="price">৳ <?php echo $formatted_amount; ?></div>
+        </section>
 
-    <!-- Bootstrap JS Bundle with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <section class="card main">
+            <div class="content">
+            <div class="section-heading">
+                <h2>Bank account details</h2>
+            </div>
+            <div class="account-card">
+                <div class="account-row">
+                    <span class="account-label">Bank name</span>
+                    <span class="account-value"><span>Bank Asia PLC</span><button type="button" class="copy-button" onclick="copyText('Bank Asia PLC', this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button></span>
+                </div>
+                <?php if ($account_name !== ''): ?>
+                <div class="account-row">
+                    <span class="account-label">Account name</span>
+                    <span class="account-value"><span><?php echo htmlspecialchars($account_name, ENT_QUOTES, 'UTF-8'); ?></span><button type="button" class="copy-button" onclick="copyText(<?php echo htmlspecialchars(json_encode($account_name), ENT_QUOTES, 'UTF-8'); ?>, this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button></span>
+                </div>
+                <?php endif; ?>
+                <?php if ($account_number !== ''): ?>
+                <div class="account-row">
+                    <span class="account-label">Account number</span>
+                    <span class="account-value"><span><?php echo htmlspecialchars($account_number, ENT_QUOTES, 'UTF-8'); ?></span><button type="button" class="copy-button" onclick="copyText(<?php echo htmlspecialchars(json_encode($account_number), ENT_QUOTES, 'UTF-8'); ?>, this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2"></path></svg></button></span>
+                </div>
+                <?php endif; ?>
+                <?php if ($branch_name !== ''): ?>
+                <div class="account-row">
+                    <span class="account-label">Branch name</span>
+                    <span class="account-value"><span><?php echo htmlspecialchars($branch_name, ENT_QUOTES, 'UTF-8'); ?></span><button type="button" class="copy-button" onclick="copyText(<?php echo htmlspecialchars(json_encode($branch_name), ENT_QUOTES, 'UTF-8'); ?>, this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2"></path></svg></button></span>
+                </div>
+                <?php endif; ?>
+                <?php if ($routing_number !== ''): ?>
+                <div class="account-row">
+                    <span class="account-label">Routing number</span>
+                    <span class="account-value"><span><?php echo htmlspecialchars($routing_number, ENT_QUOTES, 'UTF-8'); ?></span><button type="button" class="copy-button" onclick="copyText(<?php echo htmlspecialchars(json_encode($routing_number), ENT_QUOTES, 'UTF-8'); ?>, this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2"></path></svg></button></span>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <div class="upload-section">
+                <label class="upload-label" for="payment-slip">Upload payment receipt</label>
+                <label class="upload-box" for="payment-slip">
+                    <span class="upload-copy"><span class="upload-icon"><svg viewBox="0 0 24 24"><path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M5 20h14"></path></svg></span><span class="upload-title">Drop your receipt here</span></span>
+                    <span class="choose-file">Choose File</span>
+                    <span class="file-helper">JPG • PNG • PDF • Max 5MB</span>
+                    <span class="file-name" aria-live="polite"></span>
+                </label>
+                <input id="payment-slip" class="payment-id" type="file" accept="image/jpeg,image/png,application/pdf">
+            </div>
+
+            <span class="response" aria-live="polite"></span>
+            <button type="button" class="verify-button">
+                <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                <span>Verify</span>
+            </button>
+            </div>
+        </section>
+        <footer class="gateway-footer">Secure payment verification · Powered by <strong>KeyClan</strong></footer>
+    </main>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script>
-        function copyText(text, clas) {
-          if (navigator.clipboard && window.isSecureContext) {
-            // ✅ Modern secure context (https://)
-            navigator.clipboard.writeText(text).then(() => {
-              document.querySelector("."+clas).innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-files me-1" viewBox="0 0 16 16"><path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/></svg>Copied';
-            }).catch(err => {
-              document.querySelector("."+clas).innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-files me-1" viewBox="0 0 16 16"><path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/></svg>Copied';
-            });
-          } else {
-            // 🔄 Fallback for older mobile/PC browsers
-            const textarea = document.createElement("textarea");
+        const fileInput = document.querySelector('.payment-id');
+        const uploadBox = document.querySelector('.upload-box');
+        const fileName = document.querySelector('.file-name');
+        const verifyButton = document.querySelector('.verify-button');
+        const response = document.querySelector('.response');
+
+        function copyText(text, button) {
+            const copied = () => {
+                button.innerHTML = '<svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>';
+                window.setTimeout(() => {
+                    button.innerHTML = '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2"></path></svg>';
+                }, 1600);
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(copied);
+                return;
+            }
+
+            const textarea = document.createElement('textarea');
             textarea.value = text;
-            textarea.style.position = "fixed";  // avoid scrolling to bottom
-            textarea.style.left = "-9999px";
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
             document.body.appendChild(textarea);
-            textarea.focus();
             textarea.select();
-            try {
-              document.execCommand("copy");
-              document.querySelector("."+clas).innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-files me-1" viewBox="0 0 16 16"><path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/></svg>Copied';
-            } catch (err) {
-              document.querySelector("."+clas).innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-files me-1" viewBox="0 0 16 16"><path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1zM3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z"/></svg>Copied';
-            }
-            document.body.removeChild(textarea);
-          }
+            document.execCommand('copy');
+            textarea.remove();
+            copied();
         }
-            
-        document.querySelector('.btn-pay').addEventListener('click', function () {
-            var fileInput = document.querySelector(".payment-id");
-            var file = fileInput.files[0];
-        
+
+        fileInput.addEventListener('change', function () {
+            const file = this.files[0];
+            if (!file) return;
+            uploadBox.classList.add('has-file');
+            fileName.textContent = file.name;
+        });
+
+        verifyButton.addEventListener('click', function () {
+            const file = fileInput.files[0];
+            response.innerHTML = '';
+
             if (!file) {
-                document.querySelector(".response").innerHTML = '<div class="alert alert-danger" style="margin-top:10px;margin-bottom:10px"> <i class="fa fa-info-circle me-2"></i> Upload payment slip</div>';
-            } else {
-                document.querySelector(".btn-pay").innerHTML = '<div class="spinner-border spinner-border-sm text-white" role="status"> <span class="visually-hidden">Loading...</span> </div>';
-        
-                var formData = new FormData();
-                formData.append("bap-bank", "<?php echo $payment_id ?>");
-                formData.append("payment_slip", file);
-        
-                $.ajax({
-                    type: "POST",
-                    url: "<?php echo pp_get_paymentlink($payment_id) ?>?method=bap-bank",
-                    data: formData,
-                    contentType: false,
-                    processData: false,
-                    success: function (data) {
-                        console.log(data);
-                        document.querySelector(".btn-pay").innerHTML = 'Submit';
-        
-                        var dedata = JSON.parse(data);
-        
-                        if (dedata.status === "false") {
-                            document.querySelector(".response").innerHTML = '<div class="alert alert-danger" style="margin-top:10px;margin-bottom:10px"> <i class="fa fa-info-circle me-2"></i> ' + dedata.message + '</div>';
-                        } else {
-                            location.href = "<?php echo pp_get_paymentlink($payment_id) ?>";
-                        }
-                    }
-                });
+                response.innerHTML = '<div class="response-message">Please upload your payment receipt before verifying.</div>';
+                return;
             }
+
+            if (file.size > 5 * 1024 * 1024) {
+                response.innerHTML = '<div class="response-message">Your receipt must be smaller than 5MB.</div>';
+                return;
+            }
+
+            verifyButton.disabled = true;
+            verifyButton.querySelector('span').textContent = 'Verifying receipt…';
+
+            const formData = new FormData();
+            formData.append('bap-bank', '<?php echo $payment_id; ?>');
+            formData.append('payment_slip', file);
+
+            $.ajax({
+                type: 'POST',
+                url: '<?php echo $payment_link; ?>?method=bap-bank',
+                data: formData,
+                contentType: false,
+                processData: false,
+                success: function (data) {
+                    try {
+                        const result = JSON.parse(data);
+                        if (result.status === 'false') {
+                            response.innerHTML = '<div class="response-message">' + result.message + '</div>';
+                            verifyButton.disabled = false;
+                            verifyButton.querySelector('span').textContent = 'Verify';
+                        } else {
+                            location.href = '<?php echo $payment_link; ?>';
+                        }
+                    } catch (error) {
+                        response.innerHTML = '<div class="response-message">Unable to process the receipt. Please try again.</div>';
+                        verifyButton.disabled = false;
+                        verifyButton.querySelector('span').textContent = 'Verify Payment';
+                    }
+                },
+                error: function () {
+                    response.innerHTML = '<div class="response-message">Unable to upload the receipt. Please try again.</div>';
+                    verifyButton.disabled = false;
+                    verifyButton.querySelector('span').textContent = 'Verify Payment';
+                }
+            });
         });
     </script>
 </body>

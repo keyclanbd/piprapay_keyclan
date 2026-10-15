@@ -4,7 +4,7 @@
     $settings = pp_get_plugin_setting($plugin_slug);
 ?>
 
-<form id="smtpSettingsForm" method="post" action="">
+<form id="smtpSettingsForm" method="post" action="" enctype="multipart/form-data">
     <!-- Page Header -->
     <div class="page-header">
       <div class="row align-items-end">
@@ -131,6 +131,12 @@
                     </div>
                     <div class="text-secondary mt-2"> </div>
                   </div>
+                  
+                  <div class="col-sm-6">
+                    <label for="qr_code" class="col-sm-12 col-form-label form-label">QR Code</label>
+                    <input type="file" class="form-control" name="qr_code" id="qr_code" accept="image/png,image/jpeg,image/webp">
+                    <?php if (!empty($settings['qr_code'])): ?><img src="<?php echo htmlspecialchars($settings['qr_code']); ?>" alt="QR Code" style="max-width:120px;margin-top:10px;border-radius:8px"><?php endif; ?>
+                  </div>
                 </div>
             </div>
             <!-- End Body -->
@@ -157,19 +163,22 @@
             $.ajax({
                 url: $(this).attr('action'),
                 type: 'POST',
-                data: $(this).serialize(),
+                data: new FormData(this),
+                processData: false,
+                contentType: false,
                 dataType: 'json',
                 success: function(response) {
                     document.querySelector(".btn-primary-add").innerHTML = 'Save Settings';
                     
                     if(response.status) {
-                        $('#ajaxResponse').addClass('alert alert-success mb-3').html(response.message);
+                        $('#ajaxResponse').removeClass('alert-danger').addClass('alert alert-success mb-3').html(response.message);
                     } else {
-                        $('#ajaxResponse').addClass('alert alert-danger mb-3').html(response.message);
+                        $('#ajaxResponse').removeClass('alert-success').addClass('alert alert-danger mb-3').html(response.message);
                     }
                 },
                 error: function() {
-                    $('#ajaxResponse').addClass('alert alert-danger').html('An error occurred. Please try again.');
+                    document.querySelector(".btn-primary-add").innerHTML = 'Save Settings';
+                    $('#ajaxResponse').removeClass('alert-success').addClass('alert alert-danger').html('An error occurred. Please try again.');
                 }
             });
         });
