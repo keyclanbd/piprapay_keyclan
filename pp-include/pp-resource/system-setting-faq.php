@@ -191,7 +191,7 @@
           $.ajax({
             type: "POST",
             url: "/admin/dashboard",
-            data: { action: "pp_faq_list", page: page, search: search },
+                data: { action: "pp_faq_list", page: page, search: search, csrf_token: window.PP_CSRF_TOKEN || '' },
             success: function (data) {
                 tbody.empty();
                 
@@ -319,7 +319,7 @@
             ({
                 type: "POST",
                 url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                data: { "action": "pp_addfaq", "faq_title": faq_title, "faq_content": faq_content},
+                data: { "action": "pp_addfaq", "faq_title": faq_title, "faq_content": faq_content, "csrf_token": window.PP_CSRF_TOKEN || ''},
                 success: function (data) {
                     document.querySelector(".btn-model-currency-rate-saved").innerHTML = 'Add New';
                     
@@ -348,7 +348,7 @@
             ({
                 type: "POST",
                 url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                data: { "action": "pp_editfaq", "id": modelid, "faq_title": faq_title, "faq_content": faq_content, "status": status},
+                data: { "action": "pp_editfaq", "id": modelid, "faq_title": faq_title, "faq_content": faq_content, "status": status, "csrf_token": window.PP_CSRF_TOKEN || ''},
                 success: function (data) {
                     document.querySelector(".btn-model-currency-rate-saved"+modelid).innerHTML = 'Add New';
                     

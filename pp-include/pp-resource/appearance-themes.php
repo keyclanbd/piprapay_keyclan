@@ -373,7 +373,7 @@
             ({
                 type: "POST",
                 url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/appearance-themes",
-                data: { "action": "pp_appearance_themes_manager", "type": type, "mainfolder": mainfolder, "themesfolder": themesfolder},
+                data: { "action": "pp_appearance_themes_manager", "type": type, "mainfolder": mainfolder, "themesfolder": themesfolder, "csrf_token": window.PP_CSRF_TOKEN || ''},
                 success: function (data) {
                     console.log(data);
                     $("."+btn).prop("disabled", false);

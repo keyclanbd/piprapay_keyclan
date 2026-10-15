@@ -52,7 +52,7 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - PipraPay</title>
-    <link rel="icon" type="image/x-icon" href="https://cdn.piprapay.com/media/favicon.png">
+    <link rel="icon" type="image/x-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=">
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -102,7 +102,7 @@
                     </div>
                     
                     <div class="form-check" style=" margin-top: -5px; ">
-                        <a href="forgot" style=" text-decoration: none; color: #3BB77E; ">Forgot Password?</a>
+                        <a href="forgot" style=" text-decoration: none; color: #3858E9; ">Forgot Password?</a>
                     </div>
                 </div>
                 
@@ -180,7 +180,7 @@
                         var dedata = JSON.parse(data);
                         
                         if(dedata.status == "false"){
-                            document.querySelector(".login-response").innerHTML = '<div class="alert alert-danger" style="margin-top:10px;margin-bottom:10px"> <i class="fa fa-info-circle me-2"></i> '+dedata.message+'</div>';
+                            document.querySelector(".login-response").textContent = dedata.message || 'Incorrect credentials';
                         }else{
                             location.href = dedata.target;
                             document.querySelector(".login-response").innerHTML = '';

@@ -57,6 +57,16 @@
             $setting = pp_get_settings();
             
             if($transaction_details['status'] == true){
+                $createdAt = $transaction_details['response'][0]['created_at'] ?? '--';
+                if ($createdAt !== '--') {
+                    $createdTime = strtotime($createdAt);
+                    $timeout = defined('PP_PAYMENT_SESSION_TIMEOUT') ? PP_PAYMENT_SESSION_TIMEOUT : 600;
+                    if (time() - $createdTime > $timeout) {
+                        pp_set_transaction_status($payment_id, 'failed');
+                        header('Location: https://' . $_SERVER['HTTP_HOST']);
+                        exit();
+                    }
+                }
                 theme_include('gateway', $setting['response'][0]['gateway_theme'], $setting['response'][0]['gateway_theme'].'-class.php', $payment_id, 'payment_id');
                         
                 $function = str_replace('-', '_', $setting['response'][0]['gateway_theme']) . '_checkout_load';

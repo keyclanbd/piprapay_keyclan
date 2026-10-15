@@ -4,6 +4,9 @@ CREATE TABLE IF NOT EXISTS __PREFIX__admins (
     email VARCHAR(255) NOT NULL UNIQUE,
     username VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
+    reset_token VARCHAR(255) DEFAULT '--',
+    reset_token_expires_at VARCHAR(255) DEFAULT '--',
+    reset_token_used_at VARCHAR(255) DEFAULT '--',
     a_status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_at VARCHAR(255) DEFAULT '--'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -41,6 +44,10 @@ CREATE TABLE IF NOT EXISTS __PREFIX__settings (
     whatsapp_number VARCHAR(50) DEFAULT '--',
     telegram VARCHAR(255) DEFAULT '--',
     youtube_channel VARCHAR(255) DEFAULT '--',
+    footer_support_url VARCHAR(255) DEFAULT '--',
+    footer_faq_url VARCHAR(255) DEFAULT '--',
+    footer_information_url VARCHAR(255) DEFAULT '--',
+    footer_terms_url VARCHAR(255) DEFAULT '--',
     created_at VARCHAR(255) DEFAULT '--'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -55,7 +62,10 @@ CREATE TABLE IF NOT EXISTS __PREFIX__sms_data (
     balance VARCHAR(255) DEFAULT '--',
     message VARCHAR(755) DEFAULT '--',
     status VARCHAR(755) DEFAULT '--',
-    created_at VARCHAR(255) DEFAULT '--'
+    created_at VARCHAR(255) DEFAULT '--',
+    INDEX idx_transaction_id (transaction_id(191)),
+    INDEX idx_status (status(191)),
+    INDEX idx_payment_method (payment_method(191))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS __PREFIX__transaction (
@@ -83,7 +93,11 @@ CREATE TABLE IF NOT EXISTS __PREFIX__transaction (
     transaction_product_name VARCHAR(255) DEFAULT '--',
     transaction_product_description VARCHAR(755) DEFAULT '--',
     transaction_product_meta VARCHAR(1755) DEFAULT '--',
-    created_at VARCHAR(255) DEFAULT '--'
+    created_at VARCHAR(255) DEFAULT '--',
+    INDEX idx_transaction_pp_id (pp_id(191)),
+    INDEX idx_transaction_verify_id (payment_verify_id(191)),
+    INDEX idx_transaction_status (transaction_status(191)),
+    INDEX idx_transaction_created_at (created_at(191))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS __PREFIX__customer (

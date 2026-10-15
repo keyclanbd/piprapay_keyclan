@@ -1,0 +1,19 @@
+# Editor / IDE
+.vscode/
+
+# Secrets — never commit real credentials
+pp-config.php
+*.env
+.env
+
+# Local / generated state
+install.lock
+maintenance.lock
+cache/*.json
+*.log
+*.bak
+
+# User uploads & generated media (deploy servers get their own)
+pp-content/uploads/
+pp-external/media/
+pp-content/uploads/gateway-assets/

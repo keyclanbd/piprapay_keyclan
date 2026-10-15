@@ -1,12 +1,18 @@
 <?php
     define('pp_allowed_access', true);
 
-    use PHPMailer\PHPMailer\PHPMailer;
-    use PHPMailer\PHPMailer\Exception;
+    if (session_status() === PHP_SESSION_NONE) {
+        $secureSession = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (string) ($_SERVER['SERVER_PORT'] ?? '') === '443';
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'secure' => $secureSession,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+        session_start();
+    }
 
-    require __DIR__ . '/../pp-external/phpmailer/autoload.php';
-    require __DIR__ . '/../pp-external/pdf-generator/autoload.php';
-    
     if (file_exists(__DIR__ . '/../pp-config.php')) {
         require __DIR__ . '/../pp-config.php';
     }else{
@@ -14,18 +20,36 @@
         exit();
     }
     
-    use Dompdf\Dompdf;
-
     function connectDatabase() {
         global $db_host, $db_user, $db_pass, $db_name;
-    
+
         $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
-    
+
         if ($conn->connect_error) {
-            die('Connection failed: ' . $conn->connect_error);
+            error_log('Database connection failed: ' . $conn->connect_error);
+            die('System is under maintenance. Please try again later.');
         }
-    
+
         return $conn;
+    }
+
+    function generateCsrfToken() {
+        if (empty($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['csrf_token'];
+    }
+
+    function validateCsrfToken($token) {
+        if (empty($_SESSION['csrf_token']) || empty($token)) {
+            return false;
+        }
+        return hash_equals($_SESSION['csrf_token'], $token);
+    }
+
+    function isAdminActionAllowed($action) {
+        $publicActions = ['login', 'forgot-password', 'pp-invoice-payment-link', 'pp-invoice-link', 'pp_view_transaction', 'pp_view_invoice', 'pp_view_invoice_customer', 'pp_view_payment_link', 'pp_view_transaction_detail'];
+        return !in_array($action, $publicActions, true);
     }
     
     function hexToRgba($hex, $opacity = 1.0) {
@@ -270,17 +294,17 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
     }
 
     // Set a cookie securely (supports all panels)
-    function setsCookie($cookieName, $cookieValue, $days = 365) {
+    function setsCookie($cookieName, $cookieValue, $days = 7) {
         $expiryTime = time() + ($days * 24 * 60 * 60);
     
-        $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443;
+        $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (string) ($_SERVER['SERVER_PORT'] ?? '') === '443';
     
         setcookie($cookieName, $cookieValue, [
             'expires' => $expiryTime,
             'path' => '/',
             'secure' => $isSecure,
             'httponly' => true,
-            'samesite' => 'Lax', // Use 'None' if cross-domain needed (and use HTTPS)
+            'samesite' => 'Lax',
         ]);
     }
     
@@ -294,20 +318,27 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
         return $_COOKIE[$cookieName] ?? null;
     }
     
-    // Logout: clear all cookies and destroy session
+    // Logout: invalidate the application token, then clear browser state.
     function logoutCookie() {
-        // Expire all cookies
+        global $db_prefix;
+        $adminCookie = $_COOKIE['pp_admin'] ?? '';
+        if ($adminCookie !== '' && isset($db_prefix)) {
+            $safeCookie = escape_string($adminCookie);
+            updateData($db_prefix . 'browser_log', ['status'], ['inactive'], 'cookie="' . $safeCookie . '"');
+        }
+
+        $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+            (string) ($_SERVER['SERVER_PORT'] ?? '') === '443';
         foreach ($_COOKIE as $name => $value) {
             setcookie($name, '', [
                 'expires' => time() - 3600,
                 'path' => '/',
-                'secure' => true,
+                'secure' => $isSecure,
                 'httponly' => true,
                 'samesite' => 'Lax'
             ]);
         }
-    
-        // Clear session
+
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
@@ -322,94 +353,326 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
         return $value;
     }   
 
+    function pp_assert_safe_table($tableName) {
+        if (!preg_match('/^[A-Za-z0-9_]+$/', (string) $tableName)) {
+            die('Invalid table name');
+        }
+    }
+
     function getData($tableName, $coloum_name, $type = "* FROM") {
+        pp_assert_safe_table($tableName);
         $conn = connectDatabase();
-    
+
         $sql = "SELECT $type `$tableName` $coloum_name";
         $result = $conn->query($sql);
-    
+
         $data = [];
         if ($result->num_rows > 0) {
             while($row = $result->fetch_assoc()) {
                 $data[] = $row;
             }
 
+            $result->free();
+            $conn->close();
             return json_encode(['status' => true, 'response' => $data]);
         } else {
+            $conn->close();
             return json_encode(['status' => false, 'response' => []]);
         }
-    
-        $conn->close();
     }
 
-    function insertData($tableName, $columns, $values) {
+function insertData($tableName, $columns, $values) {
+        pp_assert_safe_table($tableName);
         $conn = connectDatabase();
 
         $columnsString = implode(', ', $columns);
-        $escapedValues = array_map('addslashes', $values);
-        $valuesString = "'" . implode("', '", $escapedValues) . "'";
-
-        $sql = "INSERT INTO `$tableName` ($columnsString) VALUES ($valuesString)";
-        if($conn->query($sql)){
-            return true;
-        }else{
+        $placeholders = implode(', ', array_fill(0, count($values), '?'));
+        $sql = "INSERT INTO `$tableName` ($columnsString) VALUES ($placeholders)";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
             return false;
         }
-
+        $types = str_repeat('s', count($values));
+        $stmt->bind_param($types, ...$values);
+        $result = $stmt->execute();
+        $stmt->close();
         $conn->close();
+        return $result;
     }
 
     function updateData($tableName, $columns, $values, $condition) {
+        pp_assert_safe_table($tableName);
         $conn = connectDatabase();
-    
+
         $setClauses = [];
-        for ($i = 0; $i < count($columns); $i++) {
-            $setClauses[] = "$columns[$i] = '" . addslashes($values[$i]) . "'";
+        foreach ($columns as $col) {
+            $setClauses[] = "`$col` = ?";
         }
-        $setString = implode(", ", $setClauses);
-    
+        $setString = implode(', ', $setClauses);
+
         $sql = "UPDATE `$tableName` SET $setString WHERE $condition";
-    
-        if ($conn->query($sql)) {
-            return true; 
-        } else {
-            return false; 
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            $conn->close();
+            return false;
         }
-    
+        $types = str_repeat('s', count($values));
+        $stmt->bind_param($types, ...$values);
+        $result = $stmt->execute();
+        $stmt->close();
         $conn->close();
+        return $result;
     }
 
-    function deleteData($tableName, $condition) {
+function deleteData($tableName, $condition) {
+        pp_assert_safe_table($tableName);
         $conn = connectDatabase();
-    
+
         $sql = "DELETE FROM `$tableName` WHERE $condition";
-    
+
         if ($conn->query($sql)) {
-            return true; 
+            $conn->close();
+            return true;
         } else {
-            return false; 
+            $conn->close();
+            return false;
         }
+    }
     
-        $conn->close();
+    function pp_normalize_currency_code($currency) {
+        $currency = strtoupper(trim((string) $currency));
+        return preg_match('/^[A-Z0-9]{2,10}$/', $currency) ? $currency : '';
+    }
+
+    function pp_currency_rate_cache_seconds() {
+        if (defined('PP_CURRENCY_RATE_CACHE_SECONDS')) {
+            return max(300, (int) PP_CURRENCY_RATE_CACHE_SECONDS);
+        }
+
+        return 21600;
+    }
+
+    function pp_auto_currency_rates_enabled() {
+        if (defined('PP_AUTO_CURRENCY_RATES')) {
+            return filter_var(PP_AUTO_CURRENCY_RATES, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return true;
+    }
+
+    function pp_currency_rate_is_stale($updatedAt) {
+        $timestamp = strtotime((string) $updatedAt);
+        if (!$timestamp) {
+            return true;
+        }
+
+        return (time() - $timestamp) > pp_currency_rate_cache_seconds();
+    }
+
+    function pp_get_currency_row($currency) {
+        global $db_prefix;
+
+        $currency = pp_normalize_currency_code($currency);
+        if ($currency === '') {
+            return null;
+        }
+
+        $data = json_decode(getData($db_prefix.'currency', 'WHERE currency_code="'.$currency.'"'), true);
+        return ($data['status'] ?? false) === true ? $data['response'][0] : null;
+    }
+
+    function pp_fetch_realtime_currency_rates($baseCurrency) {
+        $baseCurrency = pp_normalize_currency_code($baseCurrency);
+        if ($baseCurrency === '') {
+            return ['status' => false, 'message' => 'Invalid base currency'];
+        }
+
+        $urls = [
+            'https://open.er-api.com/v6/latest/' . rawurlencode($baseCurrency),
+            'https://api.exchangerate.host/latest?base=' . rawurlencode($baseCurrency),
+        ];
+
+        foreach ($urls as $url) {
+            $response = false;
+            if (function_exists('curl_init')) {
+                $curl = curl_init($url);
+                curl_setopt_array($curl, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_CONNECTTIMEOUT => 5,
+                    CURLOPT_TIMEOUT => 8,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_SSL_VERIFYHOST => 2,
+                    CURLOPT_USERAGENT => 'PipraPay Currency Sync',
+                ]);
+                $response = curl_exec($curl);
+                $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+                curl_close($curl);
+                if ($httpCode < 200 || $httpCode >= 300) {
+                    $response = false;
+                }
+            } else {
+                $context = stream_context_create([
+                    'http' => ['timeout' => 8, 'header' => "User-Agent: PipraPay Currency Sync\r\n"],
+                    'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+                ]);
+                $response = @file_get_contents($url, false, $context);
+            }
+
+            if ($response === false || trim((string) $response) === '') {
+                continue;
+            }
+
+            $decoded = json_decode($response, true);
+            $rates = $decoded['rates'] ?? [];
+            if (is_array($rates) && !empty($rates)) {
+                return ['status' => true, 'base' => $baseCurrency, 'rates' => $rates];
+            }
+        }
+
+        return ['status' => false, 'message' => 'Unable to fetch live currency rates'];
+    }
+
+    function pp_refresh_currency_rates($baseCurrency = null) {
+        global $db_prefix;
+
+        if (!pp_auto_currency_rates_enabled()) {
+            return false;
+        }
+
+        if ($baseCurrency === null || $baseCurrency === '') {
+            $settings = pp_get_settings();
+            $baseCurrency = $settings['response'][0]['default_currency'] ?? 'USD';
+        }
+
+        $baseCurrency = pp_normalize_currency_code($baseCurrency);
+        if ($baseCurrency === '') {
+            return false;
+        }
+
+        $liveRates = pp_fetch_realtime_currency_rates($baseCurrency);
+        if (($liveRates['status'] ?? false) !== true) {
+            return false;
+        }
+
+        $existingCurrencies = json_decode(getData($db_prefix.'currency', ''), true);
+        if (($existingCurrencies['status'] ?? false) !== true) {
+            return false;
+        }
+
+        $now = getCurrentDatetime('Y-m-d H:i:s');
+        $rates = $liveRates['rates'];
+        $updated = false;
+
+        foreach ($existingCurrencies['response'] as $row) {
+            $code = pp_normalize_currency_code($row['currency_code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+
+            if ($code === $baseCurrency) {
+                $rate = 1;
+            } elseif (isset($rates[$code]) && is_numeric($rates[$code]) && (float) $rates[$code] > 0) {
+                $rate = (float) $rates[$code];
+            } else {
+                continue;
+            }
+
+            if (updateData($db_prefix.'currency', ['currency_rate', 'created_at'], [(string) $rate, $now], 'id = "'.escape_string($row['id']).'"')) {
+                $updated = true;
+            }
+        }
+
+        return $updated;
+    }
+
+    function pp_get_currency_rate($currency, $refreshIfNeeded = true) {
+        $currency = pp_normalize_currency_code($currency);
+        if ($currency === '') {
+            return ['status' => false, 'message' => 'Invalid currency'];
+        }
+
+        $row = pp_get_currency_row($currency);
+        if ($refreshIfNeeded && ($row === null || pp_currency_rate_is_stale($row['created_at'] ?? '--'))) {
+            pp_refresh_currency_rates($currency);
+            $row = pp_get_currency_row($currency);
+        }
+
+        if ($row === null) {
+            return ['status' => false, 'message' => 'Currency rate not found'];
+        }
+
+        $rate = safeNumber($row['currency_rate'] ?? 0);
+        if ($rate <= 0) {
+            return ['status' => false, 'message' => 'Currency rate is not available'];
+        }
+
+        return ['status' => true, 'rate' => $rate, 'updated_at' => $row['created_at'] ?? '--'];
+    }
+
+    function pp_convert_currency($amount, $sourceCurrency, $targetCurrency, $refreshIfNeeded = true) {
+        $amount = safeNumber($amount);
+        $sourceCurrency = pp_normalize_currency_code($sourceCurrency);
+        $targetCurrency = pp_normalize_currency_code($targetCurrency);
+
+        if ($sourceCurrency === '' || $targetCurrency === '') {
+            return ['status' => false, 'message' => 'Invalid currency'];
+        }
+
+        if ($sourceCurrency === $targetCurrency) {
+            return [
+                'status' => true,
+                'amount' => $amount,
+                'source_currency' => $sourceCurrency,
+                'target_currency' => $targetCurrency,
+                'rate' => 1,
+                'converted' => false,
+            ];
+        }
+
+        $source = pp_get_currency_rate($sourceCurrency, $refreshIfNeeded);
+        $target = pp_get_currency_rate($targetCurrency, false);
+
+        if (($source['status'] ?? false) !== true || ($target['status'] ?? false) !== true) {
+            if ($refreshIfNeeded) {
+                pp_refresh_currency_rates($sourceCurrency);
+                $source = pp_get_currency_rate($sourceCurrency, false);
+                $target = pp_get_currency_rate($targetCurrency, false);
+            }
+        }
+
+        if (($source['status'] ?? false) !== true || ($target['status'] ?? false) !== true) {
+            return ['status' => false, 'message' => 'Currency rate unavailable'];
+        }
+
+        $convertedAmount = $amount * ($target['rate'] / $source['rate']);
+
+        return [
+            'status' => true,
+            'amount' => $convertedAmount,
+            'source_currency' => $sourceCurrency,
+            'target_currency' => $targetCurrency,
+            'rate' => $target['rate'] / $source['rate'],
+            'converted' => true,
+        ];
     }
     
     function convertToDefault($amount, $sourceCurrency, $targetCurrency) {
-        $conn = connectDatabase();
-        global $db_prefix;
-        
+        $converted = pp_convert_currency($amount, $sourceCurrency, $targetCurrency);
+        if (($converted['status'] ?? false) === true) {
+            return $converted['amount'];
+        }
+
         if ($sourceCurrency === $targetCurrency) {
             return $amount;
         }
     
-        // Fetch source and target rates
-        $sourceData = json_decode(getData($db_prefix.'currency', 'WHERE currency_code="'.$sourceCurrency.'"'), true);
-        $targetData = json_decode(getData($db_prefix.'currency', 'WHERE currency_code="'.$targetCurrency.'"'), true);
+        $sourceData = json_decode(getData($GLOBALS['db_prefix'].'currency', 'WHERE currency_code="'.pp_normalize_currency_code($sourceCurrency).'"'), true);
+        $targetData = json_decode(getData($GLOBALS['db_prefix'].'currency', 'WHERE currency_code="'.pp_normalize_currency_code($targetCurrency).'"'), true);
     
-        $sourceRate = floatval($sourceData['response'][0]['currency_rate']) ?: 1;
-        $targetRate = floatval($targetData['response'][0]['currency_rate']) ?: 1;
+        $sourceRate = floatval($sourceData['response'][0]['currency_rate'] ?? 1) ?: 1;
+        $targetRate = floatval($targetData['response'][0]['currency_rate'] ?? 1) ?: 1;
     
-        // Convert using universal formula
-        return $amount * ($targetRate / $sourceRate);
+        return safeNumber($amount) * ($targetRate / $sourceRate);
     }
             
     function getDataChangeStats($table, $where = '', $dateColumn = 'created_at', $period = 'monthly') {
@@ -541,11 +804,7 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
     
     function generateRandomFilename($extension) {
         $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        $randomString = '';
-        for ($i = 0; $i < 30; $i++) {
-            $randomString .= $characters[rand(0, strlen($characters) - 1)];
-        }
-        return $randomString . "." . $extension;
+        return bin2hex(random_bytes(16)) . "." . $extension;
     }
         
     function uploadImage($file, $max_file_size) {
@@ -556,18 +815,31 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
             return json_encode(['status' => false, 'message' => 'No file uploaded or upload failed.']);
         }
     
-        if ($file['size'] > $max_file_size) {
-            return json_encode(['status' => false, 'message' => 'File size exceeds maximum allowed.']);
+        if ($file['size'] > $max_file_size || $file['size'] <= 0 || !is_uploaded_file($file['tmp_name'])) {
+            return json_encode(['status' => false, 'message' => 'Invalid uploaded file.']);
         }
     
         $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        $allowed_mime_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
         $file_info          = pathinfo($file['name']);
         $file_extension     = strtolower($file_info['extension']);
-    
+
         if (!in_array($file_extension, $allowed_extensions)) {
             return json_encode(['status' => false, 'message' => 'Only JPG, PNG, GIF, and WEBP files are allowed.']);
         }
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $detected_mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+
+        if (!in_array($detected_mime, $allowed_mime_types, true) || @getimagesize($file['tmp_name']) === false) {
+            return json_encode(['status' => false, 'message' => 'Invalid file type. Only JPG, PNG, GIF, and WEBP images are allowed.']);
+        }
     
+        if (!is_dir($upload_directory) && !mkdir($upload_directory, 0755, true)) {
+            return json_encode(['status' => false, 'message' => 'Upload directory is unavailable.']);
+        }
+
         // ─────────── FILE NAME ───────────
         $random_filename = generateRandomFilename($file_extension);
         $full_path       = $upload_directory . $random_filename;
@@ -642,7 +914,12 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
 
     
     function generatePDF($htmlContent, $paperSize = 'A4', $orientation = 'portrait') {
-        $dompdf = new Dompdf();
+        if (!class_exists('Dompdf\\Dompdf')) {
+            require_once __DIR__ . '/../pp-external/pdf-generator/autoload.php';
+        }
+
+        $dompdfClass = 'Dompdf\\Dompdf';
+        $dompdf = new $dompdfClass();
         $dompdf->loadHtml($htmlContent);
         $dompdf->setPaper($paperSize, $orientation);
         $dompdf->render();
@@ -831,18 +1108,35 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
         return [];
     }
     
-    function pp_get_plugin_setting($slug) {
+    function pp_get_plugin_setting($slug, $resolveGatewayCurrency = true) {
         $conn = connectDatabase();
         global $db_prefix;
         
         $slug = mysqli_real_escape_string($conn, $slug);
     
-        $query = "SELECT plugin_array FROM ".$db_prefix."plugins WHERE plugin_slug = '$slug'";
+        $query = "SELECT plugin_dir, plugin_array FROM ".$db_prefix."plugins WHERE plugin_slug = '$slug'";
         $result = mysqli_query($conn, $query);
     
         if ($result && mysqli_num_rows($result) > 0) {
             $row = mysqli_fetch_assoc($result);
-            return json_decode($row['plugin_array'], true);
+            $settings = json_decode($row['plugin_array'], true);
+            if (!is_array($settings)) {
+                return [];
+            }
+
+            if ($resolveGatewayCurrency && ($row['plugin_dir'] ?? '') === 'payment-gateway' && !empty($GLOBALS['pp_current_gateway_payment_id']) && function_exists('pp_get_transation') && function_exists('pp_resolve_gateway_payment')) {
+                $transaction = pp_get_transation($GLOBALS['pp_current_gateway_payment_id']);
+                if (($transaction['status'] ?? false) === true) {
+                    $payment = pp_resolve_gateway_payment($settings, $transaction);
+                    if (($payment['currency'] ?? '') !== '') {
+                        $settings['gateway_currency'] = $payment['gateway_currency'] ?? ($settings['currency'] ?? '');
+                        $settings['currency'] = $payment['currency'];
+                        $settings['is_currency_converted'] = (($payment['is_converted'] ?? false) === true) ? 'enable' : 'disable';
+                    }
+                }
+            }
+
+            return $settings;
         }
     
         return [];
@@ -851,12 +1145,23 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
     function pp_set_plugin_setting($slug, $dataArray) {
         $conn = connectDatabase();
         global $db_prefix;
-        
+
         $slug = mysqli_real_escape_string($conn, $slug);
         $jsonData = mysqli_real_escape_string($conn, json_encode($dataArray));
-    
+
         $query = "UPDATE ".$db_prefix."plugins SET plugin_array = '$jsonData' WHERE plugin_slug = '$slug'";
-        return mysqli_query($conn, $query);
+        $result = mysqli_query($conn, $query);
+        // Upsert: cloned/copied plugins may not have a DB row yet
+        // (e.g. files present but never activated via plugin manager).
+        if ($result && mysqli_affected_rows($conn) === 0) {
+            $check = mysqli_query($conn, "SELECT id FROM ".$db_prefix."plugins WHERE plugin_slug = '$slug' LIMIT 1");
+            if ($check && mysqli_num_rows($check) === 0) {
+                $pluginName = mysqli_real_escape_string($conn, $dataArray['name'] ?? $slug);
+                $now = mysqli_real_escape_string($conn, getCurrentDatetime('Y-m-d H:i:s'));
+                $result = mysqli_query($conn, "INSERT INTO ".$db_prefix."plugins (plugin_name, plugin_slug, plugin_dir, plugin_array, status, created_at) VALUES ('$pluginName', '$slug', 'payment-gateway', '$jsonData', 'active', '$now')");
+            }
+        }
+        return $result;
     }
     
     function pp_get_theme_setting($slug) {
@@ -951,19 +1256,30 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
         $res_plugins = json_decode(getData($db_prefix.'plugins', 'WHERE plugin_slug="'.$slug.'" AND status="active"'), true);
         
         if($res_plugins['status'] == true){
+            $availability = pp_get_gateway_availability($slug, $payment_id);
+            if (($availability['is_available'] ?? false) !== true) {
+                echo '<div class="alert alert-warning m-3">'.htmlspecialchars($availability['availability_reason'] ?? 'This payment gateway is not available for this transaction.').'</div>';
+                return;
+            }
+
             $path = __DIR__ . "/../pp-content/plugins/".$res_plugins['response'][0]['plugin_dir']."/".$res_plugins['response'][0]['plugin_slug']. "/" . $res_plugins['response'][0]['plugin_slug'].'-class.php';
             if (file_exists($path)) {
                 include $path;
                 
                 $function = str_replace('-', '_', $res_plugins['response'][0]['plugin_slug']) . '_checkout_page';
                 if (function_exists($function)) {
-                    call_user_func($function, $payment_id);
+                    $GLOBALS['pp_current_gateway_payment_id'] = $payment_id;
+                    try {
+                        call_user_func($function, $payment_id);
+                    } finally {
+                        unset($GLOBALS['pp_current_gateway_payment_id']);
+                    }
                 }
             } else {
-                echo "<!-- Theme file '$file' not found -->";
+                echo "<!-- Theme file '$path' not found -->";
             }
         }else{
-            echo "<!-- Theme file '$file' not found -->";
+            echo "<!-- Gateway not found -->";
         }
     }
 
@@ -1100,44 +1416,35 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
         
         $transaction_details = json_decode(getData($db_prefix.'transaction','WHERE pp_id="'.$payment_id.'"'),true);
         if($transaction_details['status'] == true){
-            $plugin_setting = pp_get_plugin_setting($plugin_slug);
-            
-            $transaction_currency = $plugin_setting['currency'];
-            
-            $transaction_amount = convertToDefault($transaction_details['response'][0]['transaction_amount'], $transaction_details['response'][0]['transaction_currency'], $plugin_setting['currency']);
-            $transaction_fee = safeNumber($plugin_setting['fixed_charge']) + ($transaction_amount * (safeNumber($plugin_setting['percent_charge']) / 100));
-            $total = $transaction_amount + $transaction_fee;
-    
-            // ✅ Tolerance logic (new)
-            $global_setting_response = json_decode(getData($db_prefix.'settings', 'WHERE id="1"'), true);
-            $settings = pp_get_theme_setting($global_setting_response['response'][0]['gateway_theme']);
-            
-            $tolerance = $settings['tolerance'] ?? '0';
-            
-            if($tolerance == "" || $tolerance == "--"){
-                $tolerance = 0;
+            $gateway_payment = pp_calculate_gateway_payment_amount($payment_id, $plugin_slug);
+            if (($gateway_payment['status'] ?? false) !== true) {
+                return json_decode(getData($db_prefix.'sms_data','WHERE transaction_id="45745756754457-fake"'),true);
             }
             
-            $tolerance = safeNumber($tolerance);
-            
+            $total = safeNumber($gateway_payment['total']);
             $min_total = number_format($total, 2, '.', '');
-            $max_total = number_format($total + $tolerance, 2, '.', '');
-            
-            $min_total_two = number_format($total, 2);
-            $max_total_two = number_format($total + $tolerance, 2);
-            
-            $min_total_three = $total;
-            $max_total_three = $total + $tolerance;
+            $max_total = number_format($total + 0.99, 2, '.', '');
         }else{
             return json_decode(getData($db_prefix.'sms_data','WHERE transaction_id="45745756754457-fake"'),true);
         }
-    
-        // ✅ Match within range instead of exact
+
+        $escaped_payment_method = escape_string($payment_method);
+        $escaped_transaction_id = escape_string($transaction_id);
+        
         if($payment_method == "--"){
-            return json_decode(getData($db_prefix.'sms_data','WHERE transaction_id="'.$transaction_id.'" AND status="approved" AND amount >= "'.$min_total.'" AND amount <= "'.$max_total.'" OR transaction_id="'.$transaction_id.'" AND status="approved" AND amount >= "'.$min_total_two.'" AND amount <= "'.$max_total_two.'" OR transaction_id="'.$transaction_id.'" AND status="approved" AND amount >= "'.$min_total_three.'" AND amount <= "'.$max_total_three.'"'),true);
+            $sql = "SELECT * FROM `{$db_prefix}sms_data` WHERE transaction_id='{$escaped_transaction_id}' AND status='approved' AND CAST(amount AS DECIMAL(10,2)) BETWEEN '{$min_total}' AND '{$max_total}' LIMIT 1";
         }else{
-            return json_decode(getData($db_prefix.'sms_data','WHERE payment_method="'.$payment_method.'" AND transaction_id="'.$transaction_id.'" AND status="approved" AND amount >= "'.$min_total.'" AND amount <= "'.$max_total.'"         OR  payment_method="'.$payment_method.'" AND transaction_id="'.$transaction_id.'" AND status="approved" AND amount >= "'.$min_total_two.'" AND amount <= "'.$max_total_two.'" OR payment_method="'.$payment_method.'" AND transaction_id="'.$transaction_id.'" AND status="approved" AND amount >= "'.$min_total_three.'" AND amount <= "'.$max_total_three.'"'),true);
+            $sql = "SELECT * FROM `{$db_prefix}sms_data` WHERE payment_method='{$escaped_payment_method}' AND transaction_id='{$escaped_transaction_id}' AND status='approved' AND CAST(amount AS DECIMAL(10,2)) BETWEEN '{$min_total}' AND '{$max_total}' LIMIT 1";
         }
+        
+        $result = $conn->query($sql);
+        $data = [];
+        if ($result && $result->num_rows > 0) {
+            $data = [$result->fetch_assoc()];
+            $result->free();
+        }
+        $conn->close();
+        return ['status' => !empty($data), 'response' => $data];
     }
         
     
@@ -1156,9 +1463,24 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
         
         $payment_id = escape_string($payment_id);
         $status = escape_string($status);
+        if (!in_array($status, ['initialize', 'pending', 'completed', 'failed', 'refunded'], true)) {
+            return false;
+        }
         
         $transaction_details = json_decode(getData($db_prefix.'transaction','WHERE pp_id="'.$payment_id.'"'),true);
         if($transaction_details['status'] == true){
+            $current_status = $transaction_details['response'][0]['transaction_status'] ?? '';
+            $allowed_transitions = [
+                'initialize' => ['pending', 'completed', 'failed'],
+                'pending' => ['pending', 'completed', 'failed'],
+                'completed' => ['completed', 'refunded'],
+                'failed' => ['failed', 'pending'],
+                'refunded' => ['refunded']
+            ];
+            if (!isset($allowed_transitions[$current_status]) ||
+                !in_array($status, $allowed_transitions[$current_status], true)) {
+                return false;
+            }
             $columns = ['transaction_status'];
             $values = [$status];
             
@@ -1182,12 +1504,29 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
         
         $transaction_details = json_decode(getData($db_prefix.'transaction','WHERE pp_id="'.$id.'"'),true);
         if($transaction_details['status'] == true){
+            $current_status = $transaction_details['response'][0]['transaction_status'] ?? '';
+            if (!in_array($status, ['pending', 'completed', 'failed', 'refunded'], true) ||
+                in_array($current_status, ['completed', 'refunded'], true)) {
+                return false;
+            }
+
+            $plugin_info = pp_get_plugin_info($payment_method_id);
+            if (empty($plugin_info) || ($plugin_info['plugin_dir'] ?? '') !== 'payment-gateway') {
+                return false;
+            }
             $plugin_setting = pp_get_plugin_setting($payment_method_id);
+            if (!is_array($plugin_setting) || ($plugin_setting['status'] ?? '') !== 'enable' || empty($plugin_setting['currency'])) {
+                return false;
+            }
             
-            $transaction_currency = $plugin_setting['currency'];
+            $gateway_payment = pp_calculate_gateway_payment_amount($id, $payment_method_id);
+            if (($gateway_payment['status'] ?? false) !== true) {
+                return false;
+            }
             
-            $transaction_amount = convertToDefault($transaction_details['response'][0]['transaction_amount'], $transaction_details['response'][0]['transaction_currency'], $plugin_setting['currency']);
-            $transaction_fee = safeNumber($plugin_setting['fixed_charge']) + ($transaction_amount * (safeNumber($plugin_setting['percent_charge']) / 100));
+            $transaction_currency = $gateway_payment['currency'];
+            $transaction_amount = safeNumber($gateway_payment['amount']);
+            $transaction_fee = safeNumber($gateway_payment['fee']);
 
             $max_file_size = 10 * 1024 * 1024; 
             
@@ -1201,7 +1540,7 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
                 $condition = "pp_id = '".$id."'"; 
                 updateData($db_prefix.'transaction', $columns, $values, $condition);
                  
-                if (function_exists('pp_trigger_hook')) {
+                if ($status !== 'pending' && function_exists('pp_trigger_hook')) {
                     pp_trigger_hook('pp_transaction_ipn', $id);
                 }
             }
@@ -1213,49 +1552,91 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
     }
 
     function pp_set_transaction_byid($id, $payment_method_id, $payment_method, $sender, $transaction_id, $status, $sms_data = 0) {
-        $conn = connectDatabase();
         global $db_prefix;
-        
-        $id = escape_string($id);
-        $payment_method_id = escape_string($payment_method_id);
-        $payment_method = escape_string($payment_method);
-        $sender = escape_string($sender);
-        $transaction_id = escape_string($transaction_id);
-        $status = escape_string($status);
-        
-        $transaction_details = json_decode(getData($db_prefix.'transaction','WHERE pp_id="'.$id.'"'),true);
-        if($transaction_details['status'] == true){
-            $plugin_setting = pp_get_plugin_setting($payment_method_id);
-            
-            $transaction_currency = $plugin_setting['currency'];
-            
-            $transaction_amount = convertToDefault($transaction_details['response'][0]['transaction_amount'], $transaction_details['response'][0]['transaction_currency'], $plugin_setting['currency']);
-            $transaction_fee = safeNumber($plugin_setting['fixed_charge']) + ($transaction_amount * (safeNumber($plugin_setting['percent_charge']) / 100));
 
-            $columns = ['payment_method_id', 'payment_method', 'payment_verify_way', 'payment_sender_number', 'payment_verify_id', 'transaction_status', 'transaction_amount', 'transaction_fee', 'transaction_currency'];
-            $values = [$payment_method_id, $payment_method, 'id', $sender, $transaction_id, $status, $transaction_amount, $transaction_fee, $transaction_currency];
-    
-            $condition = "pp_id = '".$id."'"; 
-            updateData($db_prefix.'transaction', $columns, $values, $condition);
-            
-            if($sms_data !== 0){
-                $columns = ['status'];
-                $values = ['used'];
-        
-                $condition = "id = '".$sms_data."'"; 
-                updateData($db_prefix.'sms_data', $columns, $values, $condition);
-            }
-             
-            if (function_exists('pp_trigger_hook')) {
-                pp_trigger_hook('pp_transaction_ipn', $id);
-            }
-             
-            return true;
-        }else{
+        if (!preg_match('/^[a-f0-9]{32}$/i', (string) $id) ||
+            !preg_match('/^[A-Za-z0-9_-]{1,100}$/', (string) $transaction_id) ||
+            !in_array($status, ['pending', 'completed', 'failed', 'refunded'], true)) {
             return false;
         }
+        if ($sms_data !== 0 && (!ctype_digit((string) $sms_data) || (int) $sms_data < 1)) {
+            return false;
+        }
+
+        $transaction = pp_get_transation($id);
+        if (($transaction['status'] ?? false) !== true) {
+            return false;
+        }
+        $row = $transaction['response'][0];
+        if (in_array($row['transaction_status'] ?? '', ['completed', 'refunded'], true)) {
+            return false;
+        }
+
+        $plugin_info = pp_get_plugin_info($payment_method_id);
+        $plugin_setting = pp_get_plugin_setting($payment_method_id);
+        if (empty($plugin_info) || ($plugin_info['plugin_dir'] ?? '') !== 'payment-gateway' ||
+            !is_array($plugin_setting) || ($plugin_setting['status'] ?? '') !== 'enable' ||
+            empty($plugin_setting['currency'])) {
+            return false;
+        }
+
+        $conn = connectDatabase();
+        $conn->begin_transaction();
+        try {
+            $stmt = $conn->prepare("SELECT status FROM `{$db_prefix}sms_data` WHERE id = ? AND status = 'approved' FOR UPDATE");
+            if (!$stmt) {
+                throw new RuntimeException('Unable to prepare payment claim');
+            }
+            $smsId = (int) $sms_data;
+            $stmt->bind_param('i', $smsId);
+            if (!$stmt->execute()) {
+                throw new RuntimeException('Unable to claim payment');
+            }
+            if ($sms_data !== 0 && $stmt->get_result()->num_rows !== 1) {
+                throw new RuntimeException('Payment already used');
+            }
+            $stmt->close();
+
+            $gateway_payment = pp_calculate_gateway_payment_amount($id, $payment_method_id);
+            if (($gateway_payment['status'] ?? false) !== true) {
+                throw new RuntimeException('Gateway is not available');
+            }
+            $amount = safeNumber($gateway_payment['amount']);
+            $fee = safeNumber($gateway_payment['fee']);
+            $currency = pp_normalize_currency_code($gateway_payment['currency'] ?? $plugin_setting['currency']);
+            $stmt = $conn->prepare("UPDATE `{$db_prefix}transaction` SET payment_method_id=?, payment_method=?, payment_verify_way='id', payment_sender_number=?, payment_verify_id=?, transaction_status=?, transaction_amount=?, transaction_fee=?, transaction_currency=? WHERE pp_id=? AND transaction_status NOT IN ('completed','refunded') AND (payment_verify_id='--' OR payment_verify_id=? )");
+            if (!$stmt) {
+                throw new RuntimeException('Unable to prepare transaction update');
+            }
+            $amountText = (string) $amount;
+            $feeText = (string) $fee;
+            $stmt->bind_param('ssssssssss', $payment_method_id, $payment_method, $sender, $transaction_id, $status, $amountText, $feeText, $currency, $id, $transaction_id);
+            if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+                throw new RuntimeException('Transaction was already processed');
+            }
+            $stmt->close();
+
+            if ($sms_data !== 0) {
+                $stmt = $conn->prepare("UPDATE `{$db_prefix}sms_data` SET status='used' WHERE id=? AND status='approved'");
+                $stmt->bind_param('i', $smsId);
+                if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+                    throw new RuntimeException('Payment claim failed');
+                }
+                $stmt->close();
+            }
+            $conn->commit();
+        } catch (Throwable $exception) {
+            $conn->rollback();
+            $conn->close();
+            return false;
+        }
+        $conn->close();
+        if ($status !== 'pending' && function_exists('pp_trigger_hook')) {
+            pp_trigger_hook('pp_transaction_ipn', $id);
+        }
+        return true;
     }
-    
+
     function get_invoice_link($invoice_id){
         $invoice = pp_get_invoice($invoice_id);
         
@@ -1285,100 +1666,380 @@ function convertDateTime($datetime, $daysToSubtract = 0, $newHour = null, $newMi
         return [
             'facebook_messenger' => [
                 'url' => $res['response'][0]['facebook_messenger'] ?? '',
-                'image' => 'https://cdn.piprapay.com/media/support/messenger.png',
+                'image' => '',
                 'text' => 'Click here to chat via Messenger.'
             ],
             'support_email_address' => [
                 'url' => 'mailto:' . ($res['response'][0]['support_email_address'] ?? ''),
-                'image' => 'https://cdn.piprapay.com/media/support/email.png',
+                'image' => '',
                 'text' => 'Click here to send us an email.'
             ],
             'support_phone_number' => [
                 'url' => 'tel:' . ($res['response'][0]['support_phone_number'] ?? ''),
-                'image' => 'https://cdn.piprapay.com/media/support/call.avif',
+                'image' => '',
                 'text' => 'Click here to call us.'
             ],
             'whatsapp_number' => [
                 'url' => $res['response'][0]['whatsapp_number'] ?? '',
-                'image' => 'https://cdn.piprapay.com/media/support/whatsapp.webp',
+                'image' => '',
                 'text' => 'Chat with us on WhatsApp.'
             ],
             'facebook_page' => [
                 'url' => $res['response'][0]['facebook_page'] ?? '',
-                'image' => 'https://cdn.piprapay.com/media/support/facebook.webp',
+                'image' => '',
                 'text' => 'Visit our Facebook page.'
             ],
             'telegram' => [
                 'url' => $res['response'][0]['telegram'] ?? '',
-                'image' => 'https://cdn.piprapay.com/media/support/telegram.webp',
+                'image' => '',
                 'text' => 'Join us on Telegram.'
             ],
             'support_website' => [
                 'url' => $res['response'][0]['support_website'] ?? '',
-                'image' => 'https://cdn.piprapay.com/media/support/website.png',
+                'image' => '',
                 'text' => 'Visit our website.'
             ],
             'youtube_channel' => [
                 'url' => $res['response'][0]['youtube_channel'] ?? '',
-                'image' => 'https://cdn.piprapay.com/media/support/youtube.png',
+                'image' => '',
                 'text' => 'Subscribe to our YouTube channel.'
             ]
         ];
     }
 
     
-    function pp_get_payment_gateways($category, $payment_id) {
-        $conn = connectDatabase();
+    function pp_normalize_gateway_currency_list($value, $fallbackCurrency = '') {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                $value = $decoded;
+            } else {
+                $value = preg_split('/[\s,|]+/', $value);
+            }
+        }
+
+        if (!is_array($value)) {
+            $value = [];
+        }
+
+        $currencies = [];
+        foreach ($value as $currency) {
+            $currency = pp_normalize_currency_code($currency);
+            if ($currency !== '') {
+                $currencies[] = $currency;
+            }
+        }
+
+        $fallbackCurrency = pp_normalize_currency_code($fallbackCurrency);
+        if (empty($currencies) && $fallbackCurrency !== '') {
+            $currencies[] = $fallbackCurrency;
+        }
+
+        return array_values(array_unique($currencies));
+    }
+
+    function pp_gateway_setting_enabled($value, $default = false) {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'enable', 'enabled', 'on'], true);
+    }
+
+    function pp_resolve_gateway_payment($plugin_setting, $transaction_details) {
+        $transaction = $transaction_details['response'][0] ?? [];
+        $transactionCurrency = pp_normalize_currency_code($transaction['transaction_currency'] ?? '');
+        $gatewayCurrency = pp_normalize_currency_code($plugin_setting['gateway_currency'] ?? ($plugin_setting['currency'] ?? $transactionCurrency));
+        $directCurrencies = pp_normalize_gateway_currency_list($plugin_setting['direct_currencies'] ?? [], $gatewayCurrency);
+        $supportedCurrencies = pp_normalize_gateway_currency_list($plugin_setting['supported_currencies'] ?? [], '');
+        $legacySupportedCurrencies = !array_key_exists('direct_currencies', $plugin_setting) || trim((string) ($plugin_setting['direct_currencies'] ?? '')) === '';
+        if ($legacySupportedCurrencies && empty($supportedCurrencies)) {
+            $supportedCurrencies = pp_normalize_gateway_currency_list($plugin_setting['supported_currencies'] ?? [], $gatewayCurrency);
+        }
+        $allowConversion = pp_gateway_setting_enabled($plugin_setting['allow_currency_conversion'] ?? null, false);
+        $baseAmount = safeNumber($transaction['transaction_amount'] ?? 0) + safeNumber($transaction['transaction_fee'] ?? 0);
+        $payableCurrency = $gatewayCurrency ?: $transactionCurrency;
+        $payableAmount = $baseAmount;
+        $isConverted = false;
+        $isAvailable = true;
+        $reason = 'Available';
+
+        if (($plugin_setting['status'] ?? '') !== 'enable') {
+            $isAvailable = false;
+            $reason = 'Temporarily unavailable';
+        } elseif ($transactionCurrency === '' || $gatewayCurrency === '') {
+            $isAvailable = false;
+            $reason = 'Currency is not configured';
+        } elseif (in_array($transactionCurrency, $directCurrencies, true)) {
+            $payableCurrency = $transactionCurrency;
+            $payableAmount = $baseAmount;
+            $reason = 'Direct currency';
+        } elseif ($allowConversion && in_array($transactionCurrency, $supportedCurrencies, true)) {
+            $conversion = pp_convert_currency($baseAmount, $transactionCurrency, $gatewayCurrency);
+            if (($conversion['status'] ?? false) === true) {
+                $payableAmount = $conversion['amount'];
+                $payableCurrency = $gatewayCurrency;
+                $isConverted = $transactionCurrency !== $gatewayCurrency;
+                $reason = $isConverted ? 'Currency converted from '.$transactionCurrency.' to '.$gatewayCurrency : 'Supported currency';
+            } else {
+                $isAvailable = false;
+                $reason = $conversion['message'] ?? 'Currency rate unavailable';
+            }
+        } else {
+            $isAvailable = false;
+            $allowedCurrencies = array_values(array_unique(array_merge($directCurrencies, $allowConversion ? $supportedCurrencies : [])));
+            $reason = empty($allowedCurrencies) ? 'Currency is not supported' : 'Supports '.implode(', ', $allowedCurrencies).' only';
+        }
+
+        return [
+            'is_available' => $isAvailable,
+            'reason' => $reason,
+            'amount' => $payableAmount,
+            'currency' => $payableCurrency ?: $transactionCurrency,
+            'gateway_currency' => $gatewayCurrency ?: $transactionCurrency,
+            'transaction_currency' => $transactionCurrency,
+            'direct_currencies' => $directCurrencies,
+            'supported_currencies' => $supportedCurrencies,
+            'is_converted' => $isConverted,
+        ];
+    }
+
+    function pp_build_gateway_availability($plugin, $plugin_setting, $transaction_details) {
+        $payment = pp_resolve_gateway_payment($plugin_setting, $transaction_details);
+        $payableAmount = safeNumber($payment['amount'] ?? 0);
+        $payableCurrency = pp_normalize_currency_code($payment['currency'] ?? '');
+        $gatewayCurrency = pp_normalize_currency_code($payment['gateway_currency'] ?? $payableCurrency);
+        $isAvailable = ($payment['is_available'] ?? false) === true;
+        $reason = $payment['reason'] ?? 'Available';
+        $showUnavailable = pp_gateway_setting_enabled($plugin_setting['show_when_unavailable'] ?? null, true);
+
+        $min = $plugin_setting['min_amount'] ?? '';
+        $max = $plugin_setting['max_amount'] ?? '';
+        if ($isAvailable && $min !== '' && $min !== '--' && $payableAmount < safeNumber($min)) {
+            $isAvailable = false;
+            $minVal = safeNumber($min);
+            $reason = 'Min. '.(floor($minVal) == $minVal ? number_format($minVal, 0) : number_format($minVal, 2)).' '.$payableCurrency;
+        }
+        if ($isAvailable && $max !== '' && $max !== '--' && safeNumber($max) > 0 && $payableAmount > safeNumber($max)) {
+            $isAvailable = false;
+            $maxVal = safeNumber($max);
+            $reason = 'Max. '.(floor($maxVal) == $maxVal ? number_format($maxVal, 0) : number_format($maxVal, 2)).' '.$payableCurrency;
+        }
+
+        $logoPath = __DIR__ . '/../pp-content/plugins/'.$plugin['plugin_dir'].'/'.$plugin['plugin_slug'].'/assets/icon.png';
+        if (!file_exists($logoPath)) {
+            $isAvailable = false;
+            $reason = 'Gateway icon is missing';
+        }
+
+        return [
+            'plugin_name' => $plugin_setting['display_name'] ?? $plugin['plugin_name'] ?? $plugin['plugin_slug'],
+            'plugin_slug' => $plugin['plugin_slug'],
+            'plugin_logo' => 'https://'.$_SERVER['HTTP_HOST'].'/pp-content/plugins/'.$plugin['plugin_dir'].'/'.$plugin['plugin_slug'].'/assets/icon.png',
+            'fixed_charge' => safeNumber($plugin_setting['fixed_charge'] ?? 0),
+            'percent_charge' => safeNumber($plugin_setting['percent_charge'] ?? 0),
+            'currency' => $payableCurrency ?: $gatewayCurrency,
+            'gateway_currency' => $gatewayCurrency ?: $payableCurrency,
+            'transaction_currency' => $payment['transaction_currency'] ?? '',
+            'direct_currencies' => $payment['direct_currencies'] ?? [],
+            'supported_currencies' => $payment['supported_currencies'] ?? [],
+            'amount' => number_format($payableAmount, 2, '.', ''),
+            'is_available' => $isAvailable,
+            'is_converted' => ($payment['is_converted'] ?? false) === true,
+            'availability_reason' => $reason,
+            'show_when_unavailable' => $showUnavailable,
+        ];
+    }
+
+    function pp_calculate_gateway_payment_amount($payment_id, $plugin_slug) {
+        $transaction_details = pp_get_transation($payment_id);
+        $plugin_setting = pp_get_plugin_setting($plugin_slug, false);
+        if (($transaction_details['status'] ?? false) !== true || !is_array($plugin_setting) || empty($plugin_setting)) {
+            return [
+                'status' => false,
+                'amount' => 0,
+                'fee' => 0,
+                'total' => 0,
+                'currency' => '',
+                'gateway_currency' => '',
+                'is_converted' => false,
+                'message' => 'Gateway or transaction not found',
+            ];
+        }
+
+        $paymentTransaction = $transaction_details;
+        if (isset($paymentTransaction['response'][0])) {
+            $paymentTransaction['response'][0]['transaction_fee'] = 0;
+        }
+        $payment = pp_resolve_gateway_payment($plugin_setting, $paymentTransaction);
+        if (($payment['is_available'] ?? false) !== true) {
+            return [
+                'status' => false,
+                'amount' => 0,
+                'fee' => 0,
+                'total' => 0,
+                'currency' => $payment['currency'] ?? '',
+                'gateway_currency' => $payment['gateway_currency'] ?? '',
+                'is_converted' => ($payment['is_converted'] ?? false) === true,
+                'message' => $payment['reason'] ?? 'Gateway is not available',
+            ];
+        }
+
+        $amount = safeNumber($payment['amount'] ?? 0);
+        $fee = safeNumber($plugin_setting['fixed_charge'] ?? 0) + ($amount * safeNumber($plugin_setting['percent_charge'] ?? 0) / 100);
+
+        return [
+            'status' => true,
+            'amount' => $amount,
+            'fee' => $fee,
+            'total' => $amount + $fee,
+            'currency' => $payment['currency'] ?? '',
+            'gateway_currency' => $payment['gateway_currency'] ?? '',
+            'transaction_currency' => $payment['transaction_currency'] ?? '',
+            'is_converted' => ($payment['is_converted'] ?? false) === true,
+            'message' => $payment['reason'] ?? 'Available',
+        ];
+    }
+
+    function pp_get_gateway_payable_currency($payment_id, $plugin_slug) {
+        $payment = pp_calculate_gateway_payment_amount($payment_id, $plugin_slug);
+        return pp_normalize_currency_code($payment['currency'] ?? '');
+    }
+
+    function pp_get_gateway_payable_amount($payment_id, $plugin_slug) {
+        $payment = pp_calculate_gateway_payment_amount($payment_id, $plugin_slug);
+        return safeNumber($payment['total'] ?? 0);
+    }
+
+    function pp_get_gateway_payable_fee($payment_id, $plugin_slug) {
+        $payment = pp_calculate_gateway_payment_amount($payment_id, $plugin_slug);
+        return safeNumber($payment['fee'] ?? 0);
+    }
+
+    function pp_get_gateway_availability($plugin_slug, $payment_id) {
+        global $db_prefix;
+
+        $plugin_slug = escape_string($plugin_slug);
+        $plugins = json_decode(getData($db_prefix.'plugins', 'WHERE plugin_dir="payment-gateway" AND plugin_slug="'.$plugin_slug.'" AND status="active"'), true);
+        $transaction_details = pp_get_transation($payment_id);
+
+        if (($plugins['status'] ?? false) !== true || ($transaction_details['status'] ?? false) !== true) {
+            return ['is_available' => false, 'availability_reason' => 'Gateway or transaction not found'];
+        }
+
+        $plugin_setting = pp_get_plugin_setting($plugin_slug);
+        if (!is_array($plugin_setting) || empty($plugin_setting) || $plugin_setting === '--') {
+            return ['is_available' => false, 'availability_reason' => 'Gateway is not configured'];
+        }
+
+        return pp_build_gateway_availability($plugins['response'][0], $plugin_setting, $transaction_details);
+    }
+
+    function pp_get_payment_gateways($category, $payment_id, $includeUnavailable = true) {
         global $db_prefix;
         
         $res_plugins = json_decode(getData($db_prefix.'plugins', 'WHERE plugin_dir="payment-gateway" AND status="active"'), true);
+        $transaction_details = pp_get_transation($payment_id);
+        $data = [];
+        $availableCount = 0;
         
-        if($res_plugins['status'] == true){
-            $data = [];
-            $count = 0;
-            
+        if(($res_plugins['status'] ?? false) == true && ($transaction_details['status'] ?? false) == true){
             foreach($res_plugins['response'] as $plugins){
-                $setting = pp_get_settings();
                 $plugin_setting = pp_get_plugin_setting($plugins['plugin_slug']);
-                $transaction_details = pp_get_transation($payment_id);
-                
-                $amount = $transaction_details['response'][0]['transaction_amount']+$transaction_details['response'][0]['transaction_fee'];
-                $currency = $transaction_details['response'][0]['transaction_currency'];
-                
-                if (isset($plugin_setting['currency'])) {
-                    $amount = convertToDefault($amount, $currency, $plugin_setting['currency']);
-                    
-                    if($plugin_setting['category'] == $category){
-                        if($plugin_setting['status'] == "enable"){
-                            $min = $plugin_setting['min_amount'];
-                            $max = $plugin_setting['max_amount'];
-                    
-                            if (($min == '' || $min == '--' || $amount > $min - 0.1) && ($max == '' || $max == '--' || $amount < $max + 0.1)) {
-                                if (file_exists(__DIR__ . '/../pp-content/plugins/'.$plugins['plugin_dir'].'/'.$plugins['plugin_slug'].'/assets/icon.png')) {
-                                    $count = $count+1;
-                                    
-                                    $plugin_setting = pp_get_plugin_setting($plugins['plugin_slug']);
-                                    
-                                    $data[] = [
-                                        'plugin_name' => $plugin_setting['display_name'],
-                                        'plugin_slug' => $plugins['plugin_slug'],
-                                        'plugin_logo' => 'https://'.$_SERVER['HTTP_HOST'].'/pp-content/plugins/'.$plugins['plugin_dir'].'/'.$plugins['plugin_slug'].'/assets/icon.png'
-                                    ];
-                                }
-                            }
-                        }
-                    }
+                if (!is_array($plugin_setting) || empty($plugin_setting) || ($plugin_setting['category'] ?? '') !== $category) {
+                    continue;
+                }
+
+                $gateway = pp_build_gateway_availability($plugins, $plugin_setting, $transaction_details);
+                if (($gateway['is_available'] ?? false) === true) {
+                    $availableCount++;
+                }
+
+                if (($gateway['is_available'] ?? false) === true || ($includeUnavailable && ($gateway['show_when_unavailable'] ?? true))) {
+                    $data[] = $gateway;
                 }
             }
-            
-            if($count == 0){
-                return [ "status" => false, "response" => $data];
-            }else{
-                return [ "status" => true, "response" => $data];
-            }
-        }else{
-            return [ "status" => false, "response" => $data];
         }
+
+        usort($data, static function ($a, $b) {
+            return (int) empty($a['is_available']) <=> (int) empty($b['is_available']);
+        });
+            
+        return [ "status" => $availableCount > 0, "response" => $data, "available_count" => $availableCount];
+    }
+
+    function pp_gateway_category_key($category) {
+        $key = strtolower(trim((string) $category));
+        $key = preg_replace('/[^a-z0-9]+/', '-', $key);
+        $key = trim($key, '-');
+        return $key !== '' ? $key : 'gateway';
+    }
+
+    function pp_gateway_category_meta($category, $titleStyle = 'full') {
+        $normalizedCategory = strtolower(trim((string) $category));
+        $meta = [
+            'mobile banking' => ['title' => $titleStyle === 'short' ? 'MFS' : 'Mobile Banking', 'icon' => 'fas fa-mobile-screen-button'],
+            'ibanking' => ['title' => $titleStyle === 'short' ? 'iBanking' : 'IBanking', 'icon' => 'fas fa-building-columns'],
+            'international' => ['title' => 'International', 'icon' => 'fas fa-globe'],
+            'crypto' => ['title' => 'Crypto', 'icon' => 'fab fa-bitcoin'],
+        ];
+
+        return $meta[$normalizedCategory] ?? ['title' => trim((string) $category), 'icon' => 'fas fa-wallet'];
+    }
+
+    function pp_get_gateway_category_tabs($payment_id, $includeUnavailable = true, $titleStyle = 'full') {
+        global $db_prefix;
+
+        $res_plugins = json_decode(getData($db_prefix.'plugins', 'WHERE plugin_dir="payment-gateway" AND status="active"'), true);
+        $categories = [];
+        $tabs = [];
+
+        if (($res_plugins['status'] ?? false) !== true) {
+            return $tabs;
+        }
+
+        foreach ($res_plugins['response'] as $plugin) {
+            $pluginSettings = json_decode($plugin['plugin_array'] ?? '', true);
+            if (!is_array($pluginSettings)) {
+                continue;
+            }
+
+            $category = trim((string) ($pluginSettings['category'] ?? ''));
+            if ($category === '' || $category === '--') {
+                continue;
+            }
+
+            $categories[$category] = $category;
+        }
+
+        foreach ($categories as $category) {
+            $gateways = pp_get_payment_gateways($category, $payment_id, $includeUnavailable);
+            if (empty($gateways['response'])) {
+                continue;
+            }
+
+            $key = pp_gateway_category_key($category);
+            $baseKey = $key;
+            $counter = 2;
+            while (isset($tabs[$key])) {
+                $key = $baseKey.'-'.$counter;
+                $counter++;
+            }
+
+            $meta = pp_gateway_category_meta($category, $titleStyle);
+            $tabs[$key] = [
+                'title' => $meta['title'],
+                'category' => $category,
+                'icon' => $meta['icon'],
+                'gateways' => $gateways,
+            ];
+        }
+
+        return $tabs;
     }
     
     

@@ -162,7 +162,7 @@
           $.ajax({
             type: "POST",
             url: "/admin/dashboard",
-            data: { action: "pp_currency_list", page: page, search: search },
+                data: { action: "pp_currency_list", page: page, search: search, csrf_token: window.PP_CSRF_TOKEN || '' },
             success: function (data) {
                 tbody.empty();
                 
@@ -285,7 +285,7 @@
             ({
                 type: "POST",
                 url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                data: { "action": "pp_currencysetting", "currency_id": modelid, "currency_rate": currency_rate},
+                data: { "action": "pp_currencysetting", "currency_id": modelid, "currency_rate": currency_rate, "csrf_token": window.PP_CSRF_TOKEN || ''},
                 success: function (data) {
                     document.querySelector(".btn-model-currency-rate-saved"+modelid).innerHTML = 'Save changes';
                     

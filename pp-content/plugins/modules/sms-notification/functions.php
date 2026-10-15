@@ -140,7 +140,7 @@ function send_sms_notification_invoice_ipn($invoice_id) {
 function send_via_bulksmsbd($settings, $mobile, $message) {
     $api_key = $settings['bulksmsbd_api_key'];
     $sender_id = $settings['bulksmsbd_sender_id'];
-    $type = $settings['bulksmsbd_type']; // text or unicode
+    $type = $settings['bulksmsbd_type'];
     
     $url = "http://bulksmsbd.net/api/smsapi";
     $data = [
@@ -156,7 +156,10 @@ function send_via_bulksmsbd($settings, $mobile, $message) {
     curl_setopt($ch, CURLOPT_POST, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     $response = curl_exec($ch);
     curl_close($ch);
 }
@@ -168,7 +171,7 @@ function send_via_mimsms($settings, $mobile, $message) {
         "UserName" => $settings['mimsms_username'],
         "Apikey" => $settings['mimsms_api_key'],
         "MobileNumber" => $mobile,
-        "CampaignId" => null, // or you can use "null" (as a string) if required
+        "CampaignId" => null,
         "SenderName" => $settings['mimsms_sender_id'],
         "TransactionType" => "T",
         "Message" => $message
@@ -185,6 +188,8 @@ function send_via_mimsms($settings, $mobile, $message) {
         "Content-Type: application/json",
         "Accept: application/json"
     ]);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     
     $response = curl_exec($ch);
     
@@ -204,11 +209,13 @@ function send_via_greenweb($settings, $mobile, $message) {
     ); 
     $ch = curl_init(); 
     curl_setopt($ch, CURLOPT_URL,$url);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 1);
     curl_setopt($ch, CURLOPT_ENCODING, '');
     curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     $smsresult = curl_exec($ch);
     curl_close($ch);
 }

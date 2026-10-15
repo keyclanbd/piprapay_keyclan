@@ -1,26 +1,54 @@
 RewriteEngine On
 
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_FILENAME}\.php -f
-RewriteRule ^(.*)$ $1.php [L]
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 
-RewriteRule ^admin/login$ admin/login.php [L,QSA]
-RewriteRule ^admin/forgot$ admin/forgot.php [L,QSA]
-RewriteRule ^admin/([a-zA-Z0-9_-]+)$ admin/index.php?name=$1 [L,QSA]
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
 
-RewriteRule ^payment-link/([a-zA-Z0-9_-]+)$ payment-link/index.php?name=$1 [L,QSA]
-RewriteRule ^invoice/([a-zA-Z0-9_-]+)$ invoice/index.php?name=$1 [L,QSA]
-RewriteRule ^api/([a-zA-Z0-9_-]+)$ api/index.php?name=$1 [L,QSA]
-RewriteRule ^tb-api/([a-zA-Z0-9_-]+)$ tb-api/index.php?endpoint=$1 [L,QSA]
-RewriteRule ^payment/([a-zA-Z0-9_-]+)$ payment/index.php?name=$1 [L,QSA]
-RewriteRule ^install/([a-zA-Z0-9_-]+)$ install/index.php?name=$1 [L,QSA]
+<IfModule mod_rewrite.c>
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}\.php -f
+    RewriteRule ^(.*)$ $1.php [L]
+
+    RewriteRule ^admin/login$ admin/login.php [L,QSA]
+    RewriteRule ^admin/forgot$ admin/forgot.php [L,QSA]
+    RewriteRule ^admin/([a-zA-Z0-9_-]+)$ admin/index.php?name=$1 [L,QSA]
+
+    RewriteRule ^payment-link/([a-zA-Z0-9_-]+)$ payment-link/index.php?name=$1 [L,QSA]
+    RewriteRule ^invoice/([a-zA-Z0-9_-]+)$ invoice/index.php?name=$1 [L,QSA]
+    RewriteRule ^api/([a-zA-Z0-9_-]+)$ api/index.php?name=$1 [L,QSA]
+    RewriteRule ^payment/([a-zA-Z0-9_-]+)$ payment/index.php?name=$1 [L,QSA]
+    RewriteRule ^install/([a-zA-Z0-9_-]+)$ install/index.php?name=$1 [L,QSA]
+</IfModule>
 
 # Custom error documents
 ErrorDocument 404 /error.php
 ErrorDocument 500 /error.php
 ErrorDocument 403 /error.php
 
-
 <FilesMatch "\.(ttf|otf|eot|woff|woff2)$">
     Header set Access-Control-Allow-Origin "*"
 </FilesMatch>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(php)$">
+        Header always set X-Content-Type-Options "nosniff"
+        Header always set X-Robots-Tag "noindex, nofollow"
+    </FilesMatch>
+</IfModule>
+
+<FilesMatch "^(pp-config\.php|install\.lock|.*\.sql|.*\.log|.*\.bak|.*\.env)$">
+    Require all denied
+</FilesMatch>
+
+# Uploaded files must never be executed as server-side scripts.
+<IfModule mod_rewrite.c>
+    RewriteRule ^(?:pp-external/media|pp-content/uploads)/.*\.(?:php|phtml|php[3-8])$ - [F,NC,L]
+</IfModule>

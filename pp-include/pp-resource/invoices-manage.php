@@ -415,7 +415,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_addcustomer", "c_name": c_name, "c_email_mobile": c_email_mobile},
+                    data: { "action": "pp_addcustomer", "c_name": c_name, "c_email_mobile": c_email_mobile, "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-model-currency-rate-saved").innerHTML = 'Add New';
                         

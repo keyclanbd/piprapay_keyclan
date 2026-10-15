@@ -72,7 +72,7 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Forgot Password? - PipraPay</title>
-    <link rel="icon" type="image/x-icon" href="https://cdn.piprapay.com/media/favicon.png">
+    <link rel="icon" type="image/x-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=">
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -91,12 +91,17 @@
                     <i class="fa fa-user"></i>
                 </div>
                 <h1>Forgot Password</h1>
-                <p class="text-muted">Please enter your new password to reset</p>
+                <p class="text-muted">Enter your reset token and new password</p>
             </div>
 
             <!-- Login Form -->
             <div class="login-form" id="loginForm">
                 <div class="form-group">
+                    <label for="token">Reset Token</label>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text"><i class="fa fa-key"></i></span>
+                        <input type="text" id="token" class="form-control" placeholder="Enter reset token" required>
+                    </div>
                     <label for="password">New Password</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fa fa-lock"></i></span>
@@ -130,6 +135,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             // DOM Elements
             const togglePassword = document.getElementById('togglePassword');
+            const tokenInput = document.getElementById('token');
             const passwordInput = document.getElementById('password');
         
             // Toggle password visibility
@@ -157,8 +163,9 @@
         document.querySelector('#loginButton').addEventListener('click', function() {
             var password = document.querySelector("#password").value;
             
-            if(password == ""){
-                document.querySelector(".login-response").innerHTML = '<div class="alert alert-danger" style="margin-top:10px;margin-bottom:10px"> <i class="fa fa-info-circle me-2"></i> Enter new password</div>';
+            var token = document.querySelector("#token").value;
+            if(token == "" || password == ""){
+                document.querySelector(".login-response").textContent = 'Enter reset token and new password';
             }else{
                 document.querySelector("#loginButton").innerHTML = '<i class="fa fa-circle-o-notch fa-spin" style="font-size:18px"></i>';
             
@@ -166,17 +173,13 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/forgot",
-                    data: { "action": "forgot-password", "password": password },
+                    data: { "action": "forgot-password", "token": token, "password": password },
                     success: function (data) {
                         document.querySelector("#loginButton").innerHTML = '<span id="loginText">Change Password</span>';
                         
                         var dedata = JSON.parse(data);
                         
-                        if(dedata.status == "false"){
-                            document.querySelector(".login-response").innerHTML = '<div class="alert alert-danger" style="margin-top:10px;margin-bottom:10px"> <i class="fa fa-info-circle me-2"></i> '+dedata.message+'</div>';
-                        }else{
-                            document.querySelector(".login-response").innerHTML = '<div class="alert alert-primary" style="margin-top:10px;margin-bottom:10px"> <i class="fa fa-info-circle me-2"></i> '+dedata.message+'</div>';
-                        }
+                        document.querySelector(".login-response").textContent = dedata.message || 'Request completed';
                     }
                 });
             }

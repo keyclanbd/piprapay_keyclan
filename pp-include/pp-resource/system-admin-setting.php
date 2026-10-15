@@ -323,7 +323,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_newpassword", "currentpassword": currentpassword, "newPassword": newPassword, "confirmpassword": confirmpassword},
+                    data: { "action": "pp_newpassword", "currentpassword": currentpassword, "newPassword": newPassword, "confirmpassword": confirmpassword, "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-savenewpassword").innerHTML = 'Save changes';
                         
@@ -347,7 +347,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_basicemail", "email": basicemail},
+                    data: { "action": "pp_basicemail", "email": basicemail, "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-savebasicemail").innerHTML = 'Save changes';
                         
@@ -372,7 +372,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_basicinfo", "fullname": fullname , "username": username },
+                    data: { "action": "pp_basicinfo", "fullname": fullname , "username": username, "csrf_token": window.PP_CSRF_TOKEN || '' },
                     success: function (data) {
                         document.querySelector(".btn-savebasicinfo").innerHTML = 'Save changes';
                         

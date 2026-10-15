@@ -262,7 +262,7 @@
                   $.ajax({
                     type: "POST",
                     url: "/admin/dashboard",
-                    data: { action: "pp_transaction", visibility: "nolimited", page: page, search: search, transaction_status: transaction_status },
+                    data: { action: "pp_transaction", visibility: "nolimited", page: page, search: search, transaction_status: transaction_status, csrf_token: window.PP_CSRF_TOKEN || '' },
                     success: function (data) {
                         tbody.empty();
                         
@@ -384,6 +384,7 @@
                         formData.append('action', 'pp_bulk_action_transaction');
                         formData.append('action_name', action);
                         formData.append('ids', ids);
+                        formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
                         
                         $.ajax({
                             type: "POST",

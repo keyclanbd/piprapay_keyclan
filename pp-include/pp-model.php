@@ -2,14 +2,14 @@
     if (file_exists(__DIR__."/../pp-config.php")) {
         if (file_exists(__DIR__.'/../maintenance.lock')) {
             if (file_exists(__DIR__.'/../pp-include/pp-maintenance.php')) {
-
+                include(__DIR__."/../pp-include/pp-maintenance.php");
             }else{
                 die('System is under maintenance. Please try again later.');
             }
             exit();
         }else{
             if (file_exists(__DIR__.'/../pp-include/pp-controller.php')) {
-
+                include_once(__DIR__."/../pp-include/pp-controller.php");
             }else{
                 echo 'System is under maintenance. Please try again later.';
                 exit();
@@ -20,16 +20,6 @@
         exit();
     }
     
-    if(isset($_GET['logout'])){
-        logoutCookie();
-?>
-        <script>
-            location.href="https://<?php echo $_SERVER['HTTP_HOST']?>/admin/login";
-        </script>
-<?php
-        exit();
-    }
-    
     if (!defined('pp_allowed_access')) {
         die('Direct access not allowed');
     }
@@ -37,27 +27,41 @@
     $global_setting_response = json_decode(getData($db_prefix.'settings', 'WHERE id="1"'), true);
     $global_version = json_decode(file_get_contents(__DIR__.'/../version.json'), true);
     
+    $global_user_ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+
     if(checkCookie('pp_admin')){
-        $global_cookie_response = json_decode(getData($db_prefix.'browser_log', 'WHERE cookie="'.getCookie('pp_admin').'" AND status="active"'), true);
+        $adminCookie = getCookie('pp_admin');
+        $global_cookie_response = json_decode(getData($db_prefix.'browser_log', 'WHERE cookie="'.$adminCookie.'" AND status="active"'), true);
         if($global_cookie_response['status'] == true){
-            $global_user_response = json_decode(getData($db_prefix.'admins', 'WHERE id="'.$global_cookie_response['response'][0]['a_id'].'" AND a_status="active"'), true);
-            if($global_user_response['status'] == true){
-                $global_user_login = true;
-            }else{
+            $storedIp = $global_cookie_response['response'][0]['ip'] ?? '';
+            if ($storedIp !== $global_user_ip) {
                 $global_user_login = false;
+            }else{
+                $global_user_response = json_decode(getData($db_prefix.'admins', 'WHERE id="'.$global_cookie_response['response'][0]['a_id'].'" AND a_status="active"'), true);
+                if($global_user_response['status'] == true){
+                    $global_user_login = true;
+                }else{
+                    $global_user_login = false;
+                }
             }
         }else{
             $global_user_login = false;
         }
     }else{
         if(isset($_POST['pp_admin_session'])){
-            $global_cookie_response = json_decode(getData($db_prefix.'browser_log', 'WHERE cookie="'.$_POST['pp_admin_session'].'" AND status="active"'), true);
+            $sessionToken = escape_string($_POST['pp_admin_session']);
+            $global_cookie_response = json_decode(getData($db_prefix.'browser_log', 'WHERE cookie="'.$sessionToken.'" AND status="active"'), true);
             if($global_cookie_response['status'] == true){
-                $global_user_response = json_decode(getData($db_prefix.'admins', 'WHERE id="'.$global_cookie_response['response'][0]['a_id'].'" AND a_status="active"'), true);
-                if($global_user_response['status'] == true){
-                    $global_user_login = true;
-                }else{
+                $storedIp = $global_cookie_response['response'][0]['ip'] ?? '';
+                if ($storedIp !== $global_user_ip) {
                     $global_user_login = false;
+                }else{
+                    $global_user_response = json_decode(getData($db_prefix.'admins', 'WHERE id="'.$global_cookie_response['response'][0]['a_id'].'" AND a_status="active"'), true);
+                    if($global_user_response['status'] == true){
+                        $global_user_login = true;
+                    }else{
+                        $global_user_login = false;
+                    }
                 }
             }else{
                 $global_user_login = false;
@@ -71,17 +75,72 @@
         $action = escape_string($_POST['action']);
 
         if($action == ""){
-            echo json_encode(['status' => "false", 'message' => 'Something Wrong!']);
+            echo json_encode(['status' => 'false', 'message' => 'Something Wrong!']);
         }else{
+            // CSRF default-deny: every POST action requires a valid token
+            // except pre-auth and public guest actions (no session to bind a token to).
+            $csrfExempt = [
+                'login',
+                'forgot-password',
+                'pp-invoice-payment-link',
+                'pp-invoice-link',
+                'pp_view_transaction',
+                'pp_view_invoice',
+                'pp_view_invoice_customer',
+                'pp_view_payment_link',
+                'pp_view_transaction_detail',
+            ];
+            $requiresCsrf = !in_array($action, $csrfExempt, true);
+            $csrfToken = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+            if ($requiresCsrf && !validateCsrfToken($csrfToken)) {
+                echo json_encode(['status' => "false", 'message' => 'Invalid security token. Please refresh the page and try again.']);
+                exit();
+            }
+            if (isAdminActionAllowed($action) && !$global_user_login) {
+                echo json_encode(['status' => "false", 'message' => 'Unauthorized request']);
+                exit();
+            }
             if($action == "pp_admin_info"){
                 echo json_encode(['status' => "true", 'full_name' => $global_user_response['response'][0]['name'], 'username' => $global_user_response['response'][0]['username'], 'email' => $global_user_response['response'][0]['email']]);
             }
             
-            if($action == "login"){
+if($action == "login"){
+                $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+                $rateLimitFile = __DIR__ . '/../cache/login_rate_limit.json';
+                $rateLimitData = [];
+                if (file_exists($rateLimitFile)) {
+                    $rateLimitData = json_decode(file_get_contents($rateLimitFile), true) ?? [];
+                }
+                $rateLimitKey = 'ip_' . $clientIp;
+                $now = time();
+                if (isset($rateLimitData[$rateLimitKey])) {
+                    $attempts = $rateLimitData[$rateLimitKey];
+                    if ($attempts['count'] >= 5 && ($now - $attempts['first_attempt']) < 300) {
+                        echo json_encode(['status' => "false", 'message' => 'Too many login attempts. Please try again later.']);
+                        exit();
+                    }
+                    if (($now - $attempts['first_attempt']) > 300) {
+                        $rateLimitData[$rateLimitKey] = ['count' => 0, 'first_attempt' => $now];
+                    }
+                } else {
+                    $rateLimitData[$rateLimitKey] = ['count' => 0, 'first_attempt' => $now];
+                }
+
+                $trackFailedAttempt = function() use ($rateLimitFile, $rateLimitData, $rateLimitKey) {
+                    if (!isset($rateLimitData[$rateLimitKey])) {
+                        $rateLimitData[$rateLimitKey] = ['count' => 1, 'first_attempt' => time()];
+                    } else {
+                        $rateLimitData[$rateLimitKey]['count']++;
+                    }
+                    @mkdir(dirname($rateLimitFile), 0755, true);
+                    file_put_contents($rateLimitFile, json_encode($rateLimitData), LOCK_EX);
+                };
+
                 $email_username = escape_string($_POST['email_username']);
                 $password = escape_string($_POST['password']);
         
                 if($email_username == "" || $password == ""){
+                    $trackFailedAttempt();
                     echo json_encode(['status' => "false", 'message' => 'Incorrect credentials']);
                 }else{
                     if (filter_var($email_username, FILTER_VALIDATE_EMAIL)) {
@@ -89,12 +148,19 @@
                     }else{
                        $sql_email_username = 'username = "'.$email_username.'" AND a_status = "active"';
                     }
-                    
+                     
                     $response = json_decode(getData($db_prefix.'admins','WHERE '.$sql_email_username),true);
         
                     if($response['status'] == true){
                         if (password_verify($password, $response['response'][0]['password'])) {
-                            $cookie = rand();
+                            if (isset($rateLimitData[$rateLimitKey])) {
+                                unset($rateLimitData[$rateLimitKey]);
+                                @file_put_contents($rateLimitFile, json_encode($rateLimitData));
+                            }
+                            if (session_status() === PHP_SESSION_ACTIVE) {
+                                session_regenerate_id(true);
+                            }
+                            $cookie = bin2hex(random_bytes(32));
                             $userInfo = getUserDeviceInfo();
                             
                             $columns = ['a_id', 'cookie', 'browser', 'device', 'ip', 'status', 'created_at'];
@@ -104,39 +170,45 @@
                             
                             setsCookie('pp_admin', $cookie);
                             
-                            echo json_encode(['status' => "true", 'target' => "dashboard", 'session_token' => $cookie]);
+                            echo json_encode(['status' => "true", 'target' => "dashboard"]);
                         }else{
+                            $trackFailedAttempt();
                             echo json_encode(['status' => "false", 'message' => 'Incorrect credentials']);
                         }
                     }else{
+                        $trackFailedAttempt();
                         echo json_encode(['status' => "false", 'message' => 'Incorrect credentials']);
                     }
                 }
             }
             
-            if($action == "forgot-password"){
-                $password = escape_string($_POST['password']);
-        
-                if($password == ""){
-                    echo json_encode(['status' => "false", 'message' => 'Enter new password']);
+if($action == "forgot-password"){
+                $token = escape_string($_POST['token'] ?? '');
+                $password = escape_string($_POST['password'] ?? '');
+                $confirmPassword = escape_string($_POST['confirm_password'] ?? $password);
+
+                if($token == "" || $password == ""){
+                    echo json_encode(['status' => "false", 'message' => 'Enter reset token and new password']);
+                }elseif(strlen($password) < 8){
+                    echo json_encode(['status' => "false", 'message' => 'Password must be at least 8 characters long']);
+                }elseif($password !== $confirmPassword){
+                    echo json_encode(['status' => "false", 'message' => 'Passwords do not match']);
                 }else{
-                    if (isset($password_reset)) {
-                        if($password_reset == "on"){
-                    
+                    $resetRecord = json_decode(getData($db_prefix.'admins', 'WHERE reset_token="'.$token.'" AND reset_token_used_at="--"'), true);
+                    if ($resetRecord['status'] !== true) {
+                        echo json_encode(['status' => "false", 'message' => 'Invalid or expired reset token']);
+                    } else {
+                        $expiresAt = $resetRecord['response'][0]['reset_token_expires_at'] ?? '--';
+                        if ($expiresAt !== '--' && strtotime($expiresAt) < time()) {
+                            echo json_encode(['status' => "false", 'message' => 'Invalid or expired reset token']);
+                        } else {
                             $hashedPass = password_hash($password, PASSWORD_BCRYPT);
-                            
-                            $columns = ['password'];
-                            $values = [$hashedPass];
-                            $condition = "id = '1'"; 
-                            
-                            updateData($db_prefix.'admins', $columns, $values, $condition);
-                            
+                            $adminId = $resetRecord['response'][0]['id'];
+                            updateData($db_prefix.'admins', ['password', 'reset_token', 'reset_token_expires_at', 'reset_token_used_at'], [$hashedPass, '--', '--', getCurrentDatetime('Y-m-d H:i:s')], "id = '".$adminId."'");
+                            updateData($db_prefix.'browser_log', ['status'], ['inactive'], 'a_id="' . $adminId . '"');
+                            logoutCookie();
                             echo json_encode(['status' => "true", 'message' => 'Password changed successfully']);
-                        }else{
-                            echo json_encode(['status' => "false", 'message' => 'Forgot Password is Disabled']);
                         }
-                    }else{
-                        echo json_encode(['status' => "false", 'message' => 'Forgot Password is Disabled']);
                     }
                 }
             }
@@ -523,6 +595,8 @@
                 
                 if($currentpassword == "" || $newPassword == "" || $confirmpassword == ""){
                     echo json_encode(['status' => "false", 'message' => 'Fill all required field']);
+                }elseif(strlen($newPassword) < 8){
+                    echo json_encode(['status' => "false", 'message' => 'Password must be at least 8 characters long']);
                 }else{
                     if($global_user_login == true){
                         if (password_verify($currentpassword, $global_user_response['response'][0]['password'])) {
@@ -534,7 +608,8 @@
                                 $condition = "id = '".$global_user_response['response'][0]['id']."'"; 
                                 
                                 updateData($db_prefix.'admins', $columns, $values, $condition);
-                                
+                                updateData($db_prefix.'browser_log', ['status'], ['inactive'], 'a_id="' . $global_user_response['response'][0]['id'] . '"');
+                                logoutCookie();
                                 echo json_encode(['status' => "true", 'message' => "Password updated"]);
                             }else{
                                 echo json_encode(['status' => "false", 'message' => 'Incorrect New password & Confirm password']);
@@ -590,14 +665,40 @@
                     exit;
                 }
                 
-                $zipTmpPath = $_FILES['zip_file']['tmp_name'];
-                $tempDir = __DIR__ . "/../temp_upload_" . time() . "/";
+                $upload = $_FILES['zip_file'];
+                if ($upload['size'] <= 0 || $upload['size'] > 25 * 1024 * 1024 || !is_uploaded_file($upload['tmp_name'])) {
+                    echo json_encode(["status" => "error", "message" => "Invalid ZIP upload."]);
+                    exit;
+                }
+
+                $zipTmpPath = $upload['tmp_name'];
+                $tempDir = __DIR__ . "/../temp_upload_" . bin2hex(random_bytes(8)) . "/";
                 mkdir($tempDir, 0755, true);
                 
                 // Extract ZIP
                 $zip = new ZipArchive();
                 if ($zip->open($zipTmpPath) === TRUE) {
-                    $zip->extractTo($tempDir);
+                    if ($zip->numFiles > 5000) {
+                        $zip->close();
+                        deleteFolders($tempDir);
+                        echo json_encode(["status" => "error", "message" => "ZIP contains too many files."]);
+                        exit;
+                    }
+                    for ($i = 0; $i < $zip->numFiles; $i++) {
+                        $entryName = str_replace('\\\\', '/', $zip->getNameIndex($i));
+                        if ($entryName === '' || str_starts_with($entryName, '/') || preg_match('#(^|/)\.\.(/|$)#', $entryName)) {
+                            $zip->close();
+                            deleteFolders($tempDir);
+                            echo json_encode(["status" => "error", "message" => "Invalid ZIP path."]);
+                            exit;
+                        }
+                    }
+                    if (!$zip->extractTo($tempDir)) {
+                        $zip->close();
+                        deleteFolders($tempDir);
+                        echo json_encode(["status" => "error", "message" => "Failed to extract ZIP."]);
+                        exit;
+                    }
                     $zip->close();
                 } else {
                     echo json_encode(["status" => "error", "message" => "Failed to extract ZIP."]);
@@ -626,6 +727,14 @@
                 $slug = $data['slug'] ?? null;
                 $mrdr = $data['mrdr'] ?? null;
                 
+                if (!in_array($type, ['plugins', 'themes'], true) ||
+                    !is_string($slug) || !preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/i', $slug) ||
+                    !is_string($mrdr) || !preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/i', $mrdr)) {
+                    echo json_encode(["status" => "error", "message" => "Invalid plugin metadata."]);
+                    deleteFolders($tempDir);
+                    exit;
+                }
+                
                 if (!$type || !$slug || !$mrdr) {
                     echo json_encode(["status" => "error", "message" => "plugin.json must include type, slug, and mrdr."]);
                     exit;
@@ -637,32 +746,58 @@
                     mkdir($basePath, 0755, true);
                 }
                 
-                // Copy files
-                function copyFolder($src, $dst) {
+                // Copy files safely - prevent ZIP path traversal
+                $allowedBase = realpath($basePath);
+
+                function copyFolderSecure($src, $dst, $allowedBase) {
                     $dir = opendir($src);
-                    @mkdir($dst);
+                    @mkdir($dst, 0755, true);
                     while (false !== ($file = readdir($dir))) {
                         if ($file != '.' && $file != '..') {
                             $srcPath = $src . '/' . $file;
                             $dstPath = $dst . '/' . $file;
+                            $realDst = realpath(dirname($dstPath));
+                            if ($realDst === false || strpos($realDst, $allowedBase) !== 0) {
+                                continue;
+                            }
                             if (is_dir($srcPath)) {
-                                copyFolder($srcPath, $dstPath);
-                            } else {
+                                copyFolderSecure($srcPath, $dstPath, $allowedBase);
+                            } elseif (is_file($srcPath)) {
                                 copy($srcPath, $dstPath);
                             }
                         }
                     }
                     closedir($dir);
                 }
-                
+
+                // Validate extracted ZIP contents stay within tempDir
+                function validateExtractedPath($baseDir) {
+                    $iterator = new RecursiveIteratorIterator(
+                        new RecursiveDirectoryIterator($baseDir, RecursiveDirectoryIterator::SKIP_DOTS),
+                        RecursiveIteratorIterator::SELF_FIRST
+                    );
+                    $realBase = realpath($baseDir);
+                    foreach ($iterator as $item) {
+                        $realPath = realpath($item->getPathname());
+                        if ($realPath === false || strpos($realPath, $realBase) !== 0) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                if (!validateExtractedPath($tempDir)) {
+                    echo json_encode(["status" => "error", "message" => "Invalid ZIP contents."]);
+                    deleteFolders($tempDir);
+                    exit;
+                }
+
                 // Figure out if zip had subfolder (e.g., myplugin/plugin.json)
                 $rootItems = glob($tempDir . "*");
                 if (count($rootItems) === 1 && is_dir($rootItems[0])) {
-                    // ZIP had a folder
-                    copyFolder($rootItems[0], $basePath);
+                    copyFolderSecure($rootItems[0], $basePath, $allowedBase);
                 } else {
-                    // ZIP had files directly
-                    copyFolder($tempDir, $basePath);
+                    copyFolderSecure($tempDir, $basePath, $allowedBase);
                 }
                 
                 // Cleanup
@@ -844,22 +979,72 @@
             
             
             
+            if($action == "pp_savefooter_links"){
+                if ($mode == "demo") {
+                    echo json_encode(["status" => "false", "message" => "Error: Demo mode is active"]);
+                    exit();
+                }
+
+                // Self-migrate for existing installs
+                try {
+                    $__pp_conn = connectDatabase();
+                    foreach (['footer_support_url', 'footer_faq_url', 'footer_information_url', 'footer_terms_url'] as $col) {
+                        $check = $__pp_conn->query("SHOW COLUMNS FROM `".$db_prefix."settings` LIKE '".$col."'");
+                        if ($check && $check->num_rows == 0) {
+                            $__pp_conn->query("ALTER TABLE `".$db_prefix."settings` ADD COLUMN `".$col."` VARCHAR(255) DEFAULT '--'");
+                        }
+                    }
+                    $__pp_conn->close();
+                } catch (Throwable $e) {}
+
+                $footer_support_url = escape_string($_POST['footer_support_url'] ?? '');
+                $footer_faq_url = escape_string($_POST['footer_faq_url'] ?? '');
+                $footer_information_url = escape_string($_POST['footer_information_url'] ?? '');
+                $footer_terms_url = escape_string($_POST['footer_terms_url'] ?? '');
+
+                if($footer_support_url == "" || $footer_faq_url == "" || $footer_information_url == "" || $footer_terms_url == ""){
+                    echo json_encode(['status' => "false", 'message' => 'Fill all required field']);
+                }else{
+                    if($global_user_login == true){
+                        $columns = ['footer_support_url', 'footer_faq_url', 'footer_information_url', 'footer_terms_url'];
+                        $values = [$footer_support_url, $footer_faq_url, $footer_information_url, $footer_terms_url];
+                        $condition = "id = '1'";
+
+                        updateData($db_prefix.'settings', $columns, $values, $condition);
+
+                        echo json_encode(['status' => "true", 'message' => "Footer links updated"]);
+                    }else{
+                        echo json_encode(['status' => "false", 'message' => 'Invalid data']);
+                    }
+                }
+            }
+
+
+
             if($action == "pp_generate_api"){
                 if ($mode == "demo") {
                     echo json_encode(["status" => "false", "message" => "Error: Demo mode is active"]);
                     exit();
                 }
                 
-                $api_key = rand().uniqid().rand().rand().uniqid().rand();
-
                 if($global_user_login == true){
+                    try {
+                        $api_key = bin2hex(random_bytes(32));
+                    } catch (Exception $e) {
+                        echo json_encode(['status' => "false", 'message' => 'Unable to generate api key']);
+                        exit();
+                    }
+
                     $columns = ['api_key'];
                     $values = [$api_key];
                     $condition = "id = '1'"; 
+                    $updated = updateData($db_prefix.'settings', $columns, $values, $condition);
                     
-                    updateData($db_prefix.'settings', $columns, $values, $condition);
-                    
-                    echo json_encode(['status' => "true", 'api' => $api_key]);
+                    if ($updated) {
+                        echo json_encode(['status' => "true", 'api' => $api_key]);
+                    } else {
+                        echo json_encode(['status' => "false", 'message' => 'Unable to save api key']);
+                    }
                 }else{
                     echo json_encode(['status' => "false", 'message' => 'Invalid data']);
                 }
@@ -1112,7 +1297,7 @@
                         echo json_encode(['status' => "false", 'message' => "Email address already exit."]); 
                     }else{
                         $columns = ['c_id', 'c_name', 'c_email_mobile', 'c_status', 'created_at'];
-                        $values = [rand(), $c_name, $c_email_mobile, 'active', getCurrentDatetime('Y-m-d H:i:s')];
+                        $values = [bin2hex(random_bytes(16)), $c_name, $c_email_mobile, 'active', getCurrentDatetime('Y-m-d H:i:s')];
         
                         insertData($db_prefix.'customer', $columns, $values);
                         
@@ -1179,6 +1364,10 @@
                 }else{
                     $response = json_decode(getData($db_prefix.'customer','WHERE id="'.$c_id.'"'),true);
                     if($response['status'] == true){
+                        if (!in_array($c_status, ['active', 'inactive'], true)) {
+                            echo json_encode(['status' => "false", 'message' => 'Invalid data']);
+                            exit();
+                        }
                         $columns = ['c_name', 'c_email_mobile', 'c_status'];
                         $values = [$c_name, $c_email_mobile, $c_status];
                         
@@ -1382,7 +1571,7 @@
                 }
                 
                 $total = 0;
-                $response = json_decode(getData($db_prefix.'sms_data',"WHERE payment_method LIKE '%$search%' ".$sms_status." OR sim LIKE '%$search%' ".$sms_status." OR message LIKE '%$search%' ".$sms_status),true);
+                $response = json_decode(getData($db_prefix.'sms_data',"WHERE (payment_method LIKE '%$search%' OR sim LIKE '%$search%' OR message LIKE '%$search%' OR mobile_number LIKE '%$search%' OR transaction_id LIKE '%$search%') ".$sms_status),true);
                 foreach($response['response'] as $res){
                     $total = $total+1;
                 }
@@ -1392,7 +1581,7 @@
                 $pp_transaction = [];
                 $showing = 0;
                 
-                $response = json_decode(getData($db_prefix.'sms_data',"WHERE payment_method LIKE '%$search%' ".$sms_status." OR sim LIKE '%$search%' ".$sms_status." OR message LIKE '%$search%' ".$sms_status." ORDER BY 1 DESC LIMIT ".$limit." OFFSET ".$offset),true);
+                $response = json_decode(getData($db_prefix.'sms_data',"WHERE (payment_method LIKE '%$search%' OR sim LIKE '%$search%' OR message LIKE '%$search%' OR mobile_number LIKE '%$search%' OR transaction_id LIKE '%$search%') ".$sms_status." ORDER BY 1 DESC LIMIT ".$limit." OFFSET ".$offset),true);
                 foreach($response['response'] as $row){
                     $showing =$showing+1;
                     
@@ -1489,16 +1678,24 @@
                     exit();
                 }
                 
-                $api_key = rand().uniqid().rand().rand().uniqid().rand();
-
                 if($global_user_login == true){
+                    try {
+                        $webhook_key = bin2hex(random_bytes(32));
+                    } catch (Exception $e) {
+                        echo json_encode(['status' => "false", 'message' => 'Unable to generate webhook url']);
+                        exit();
+                    }
+
                     $columns = ['webhook'];
-                    $values = [$api_key];
+                    $values = [$webhook_key];
                     $condition = "id = '1'"; 
+                    $updated = updateData($db_prefix.'settings', $columns, $values, $condition);
                     
-                    updateData($db_prefix.'settings', $columns, $values, $condition);
-                    
-                    echo json_encode(['status' => "true", 'api' => $api_key]);
+                    if ($updated) {
+                        echo json_encode(['status' => "true", 'webhook' => $webhook_key]);
+                    } else {
+                        echo json_encode(['status' => "false", 'message' => 'Unable to save webhook url']);
+                    }
                 }else{
                     echo json_encode(['status' => "false", 'message' => 'Invalid data']);
                 }
@@ -1693,14 +1890,14 @@
                     }
                     if($pl_id == ""){
                         $payment_link_create = true;
-                        $pl_id = rand();
+                        $pl_id = bin2hex(random_bytes(12));
                     }else{
                         $response_payment_link_checker = json_decode(getData($db_prefix.'payment_link','WHERE pl_id="'.$pl_id.'"'),true);
                         if($response_payment_link_checker['status'] == true){
                             $payment_link_create = false;
                         }else{
                             $payment_link_create = true;
-                            $pl_id = rand();
+$pl_id = bin2hex(random_bytes(12));
                         }
                     }
                     
@@ -1977,14 +2174,14 @@
                     }
                     if($i_id == ""){
                         $invoice_create = true;
-                        $i_id = rand();
+                        $i_id = bin2hex(random_bytes(12));
                     }else{
                         $response_invoice_checker = json_decode(getData($db_prefix.'invoice','WHERE i_id="'.$i_id.'"'),true);
                         if($response_invoice_checker['status'] == true){
                             $invoice_create = false;
                         }else{
                             $invoice_create = true;
-                            $i_id = rand();
+$i_id = bin2hex(random_bytes(12));
                         }
                     }
                     
@@ -2130,6 +2327,8 @@
                 
                 if($type == "" || $mainfolder == "" || $pluginfolder == ""){
                     echo json_encode(['status' => "false", 'message' => 'Invalid data']);
+                }elseif (!preg_match('/^[A-Za-z0-9_-]+$/', $mainfolder) || !preg_match('/^[A-Za-z0-9_-]+$/', $pluginfolder) || !in_array($type, ['delete', 'activate', 'deactivate'], true)) {
+                    echo json_encode(['status' => "false", 'message' => 'Invalid data']);
                 }else{
                     if($type == "delete"){
                         if (is_dir(__DIR__.'/../pp-content/plugins/'.$mainfolder.'/'.$pluginfolder)) {
@@ -2196,6 +2395,8 @@
                 
                 if($type == "" || $mainfolder == "" || $themesfolder == ""){
                     echo json_encode(['status' => "false", 'message' => 'Invalid data']);
+                }elseif (!preg_match('/^[A-Za-z0-9_-]+$/', $mainfolder) || !preg_match('/^[A-Za-z0-9_-]+$/', $themesfolder) || !in_array($type, ['delete', 'activate', 'deactivate'], true)) {
+                    echo json_encode(['status' => "false", 'message' => 'Invalid data']);
                 }else{
                     if($global_setting_response['response'][0]['gateway_theme'] == $themesfolder){
 
@@ -2227,7 +2428,39 @@
                 $newData = $_POST;
                 unset($newData['action']);
                 unset($newData['plugin_slug']);
-                
+                if (isset($newData['currency'])) {
+                    $newData['currency'] = pp_normalize_currency_code($newData['currency']);
+                }
+                if (!isset($newData['direct_currencies']) || trim((string) $newData['direct_currencies']) === '') {
+                    $newData['direct_currencies'] = $newData['currency'] ?? '';
+                } elseif (is_string($newData['direct_currencies'])) {
+                    $newData['direct_currencies'] = implode(',', pp_normalize_gateway_currency_list($newData['direct_currencies'], $newData['currency'] ?? ''));
+                }
+                if (!isset($newData['supported_currencies']) || trim((string) $newData['supported_currencies']) === '') {
+                    $newData['supported_currencies'] = '';
+                } elseif (is_string($newData['supported_currencies'])) {
+                    $newData['supported_currencies'] = implode(',', pp_normalize_gateway_currency_list($newData['supported_currencies'], ''));
+                }
+                if (!isset($newData['allow_currency_conversion'])) {
+                    $newData['allow_currency_conversion'] = 'disable';
+                }
+                if (!isset($newData['show_when_unavailable'])) {
+                    $newData['show_when_unavailable'] = 'enable';
+                }
+                unset($newData['gateway_currency'], $newData['is_currency_converted']);
+                if (isset($_FILES['qr_code']) && $_FILES['qr_code']['error'] === UPLOAD_ERR_OK) {
+                    $allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+                    $mime = mime_content_type($_FILES['qr_code']['tmp_name']);
+                    if (in_array($mime, $allowedTypes, true) && $_FILES['qr_code']['size'] <= 5 * 1024 * 1024) {
+                        $uploadDir = __DIR__ . '/../pp-content/uploads/gateway-assets/';
+                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                        $extension = strtolower(pathinfo($_FILES['qr_code']['name'], PATHINFO_EXTENSION));
+                        $filename = $plugin_slug . '-qr-' . bin2hex(random_bytes(8)) . '.' . $extension;
+                        if (move_uploaded_file($_FILES['qr_code']['tmp_name'], $uploadDir . $filename)) {
+                            $newData['qr_code'] = pp_get_site_url() . '/pp-content/uploads/gateway-assets/' . $filename;
+                        }
+                    }
+                }
                 $success = pp_set_plugin_setting($plugin_slug, $newData);
             
                 header('Content-Type: application/json');
@@ -2267,22 +2500,78 @@
             
             
             if($action == "pp-invoice-payment-link"){
-                
-                $full_name = $_POST['full-name'] ?? '';
-                $email_mobile = $_POST['email-mobile'] ?? '';
-                $paymentid = $_POST['pp-paymentid'] ?? '';
+                header('Content-Type: application/json');
+
+                if (!empty($_POST['website'] ?? '')) {
+                    echo json_encode(['status' => false, 'message' => 'Please fill all required payment details.']);
+                    exit();
+                }
+
+                $plRateIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                $plRateFile = __DIR__ . '/../cache/payment_link_rate_limit.json';
+                $plRateData = [];
+                if (file_exists($plRateFile)) {
+                    $plRateData = json_decode(@file_get_contents($plRateFile), true) ?? [];
+                }
+                $plRateKey = 'ip_' . preg_replace('/[^a-zA-Z0-9_:\.]/', '', $plRateIp);
+                $plNow = time();
+                if (isset($plRateData[$plRateKey]) && ($plNow - $plRateData[$plRateKey]['first']) < 600) {
+                    if ($plRateData[$plRateKey]['count'] >= 20) {
+                        echo json_encode(['status' => false, 'message' => 'Too many requests. Please try again later.']);
+                        exit();
+                    }
+                    $plRateData[$plRateKey]['count']++;
+                } else {
+                    $plRateData[$plRateKey] = ['count' => 1, 'first' => $plNow];
+                }
+                @file_put_contents($plRateFile, json_encode($plRateData));
+
+                $full_name = trim((string)($_POST['full-name'] ?? ''));
+                $email_mobile = trim((string)($_POST['email-mobile'] ?? ''));
+                $paymentid = preg_replace('/[^a-zA-Z0-9\-_]/', '', (string)($_POST['pp-paymentid'] ?? ''));
+
+                if (strlen($full_name) > 100) {
+                    $full_name = substr($full_name, 0, 100);
+                }
+                $emailIsValid = filter_var($email_mobile, FILTER_VALIDATE_EMAIL) !== false;
+                $mobileIsValid = preg_match('/^\+?[0-9]{6,15}$/', $email_mobile) === 1;
+                if ($email_mobile === '' || strlen($email_mobile) > 100 || (!$emailIsValid && !$mobileIsValid)) {
+                    echo json_encode(['status' => false, 'message' => 'Enter a valid email address or mobile number.']);
+                    exit();
+                }
                 
                 $response_transaction_checker = json_decode(getData($db_prefix.'payment_link','WHERE pl_id="'.$paymentid.'"'),true);
                 if($response_transaction_checker['status'] == true){
-                    $meta = [];
-                    
-                    foreach ($_POST as $key => $value) {
-                        if (!in_array($key, ['full-name', 'email-mobile', 'submit', 'action', 'pp-paymentid'])) {
-                            $meta[$key] = $value;
+                    $definedFields = [];
+                    $linkItems = function_exists('pp_get_payment_link_items') ? pp_get_payment_link_items($paymentid) : ['status' => false];
+                    if (isset($linkItems['status']) && $linkItems['status'] == true && !empty($linkItems['response'])) {
+                        foreach ($linkItems['response'] as $itemRow) {
+                            if (!empty($itemRow['pl_field_name'])) {
+                                $definedFields[] = (string)$itemRow['pl_field_name'];
+                            }
                         }
                     }
-                    
+                    $internalKeys = ['full-name', 'email-mobile', 'submit', 'action', 'pp-paymentid', 'website', 'csrf_token'];
+
+                    $meta = [];
+
+                    foreach ($_POST as $key => $value) {
+                        if (in_array($key, $internalKeys, true)) {
+                            continue;
+                        }
+                        if (!in_array($key, $definedFields, true)) {
+                            continue;
+                        }
+                        if (is_array($value)) {
+                            continue;
+                        }
+                        $meta[$key] = substr(trim((string)$value), 0, 1000);
+                    }
+
                     foreach ($_FILES as $key => $file) {
+                        if (!in_array($key, $definedFields, true)) {
+                            continue;
+                        }
                         if (is_array($file['name'])) {
                             // Multiple files (file input had name="something[]")
                             for ($i = 0; $i < count($file['name']); $i++) {
@@ -2319,43 +2608,50 @@
                         }
                     }
     
-                    $baseURL = 'https://'.$_SERVER['HTTP_HOST'].'/api/create-charge';
+                    if ($full_name === '') {
+                        $full_name = $email_mobile;
+                    }
+                    $amount = safeNumber($response_transaction_checker['response'][0]['pl_amount']);
+                    $currency = strtoupper(trim((string) $response_transaction_checker['response'][0]['pl_currency']));
+                    $metadata = json_encode(['paymentid' => $paymentid]);
+                    $product_meta = json_encode($meta);
+                    $pp_id = bin2hex(random_bytes(16));
+                    $payment_link_url = 'https://' . $_SERVER['HTTP_HOST'] . '/payment-link/' . $paymentid;
+
+                    if ($amount <= 0 || $currency === '' || $metadata === false || $product_meta === false) {
+                        echo json_encode(['status' => false, 'message' => 'Please fill all required payment details.']);
+                        exit();
+                    }
                     
-                    $payload = [
-                        'full_name'         => $full_name,
-                        'email_mobile'      => $email_mobile,
-                        'amount'            => $response_transaction_checker['response'][0]['pl_amount'],
-                        'currency'          => $response_transaction_checker['response'][0]['pl_currency'],
-                        'metadata'          => [
-                            'paymentid'   => $paymentid
-                        ],
-                        'redirect_url'      => '--',
-                        'cancel_url'        => 'https://'.$_SERVER['HTTP_HOST'].'/payment-link/'.$paymentid,
-                        'webhook_url'       => '--',
-                        'return_type'       => 'POST',
-                        'product_name'      => $response_transaction_checker['response'][0]['pl_name'],
-                        'product_description' => $response_transaction_checker['response'][0]['pl_description'],
-                        'product_meta'      => $meta
+                    $columns = ['pp_id', 'c_id', 'c_name', 'c_email_mobile', 'transaction_amount', 'transaction_fee', 'transaction_refund_amount', 'transaction_currency', 'transaction_redirect_url', 'transaction_return_type', 'transaction_cancel_url', 'transaction_webhook_url', 'transaction_metadata', 'transaction_status', 'transaction_product_name', 'transaction_product_description', 'transaction_product_meta', 'created_at'];
+                    $values = [
+                        $pp_id,
+                        '--',
+                        $full_name,
+                        $email_mobile,
+                        $amount,
+                        0,
+                        0,
+                        $currency,
+                        '--',
+                        'POST',
+                        $payment_link_url,
+                        '--',
+                        $metadata,
+                        'initialize',
+                        $response_transaction_checker['response'][0]['pl_name'],
+                        $response_transaction_checker['response'][0]['pl_description'],
+                        $product_meta,
+                        getCurrentDatetime('Y-m-d H:i:s')
                     ];
                     
-                    // Initialize cURL
-                    $curl = curl_init();
-                    
-                    curl_setopt_array($curl, [
-                        CURLOPT_URL            => $baseURL,
-                        CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_POST           => true,
-                        CURLOPT_POSTFIELDS     => json_encode($payload),
-                        CURLOPT_HTTPHEADER     => [
-                            'Content-Type: application/json',
-                            'mh-piprapay-api-key:' .$global_setting_response['response'][0]['api_key']
-                        ],
-                    ]);
-                    
-                    $response = curl_exec($curl);
-                    echo $response;
-                    curl_close($curl);
+                    if (insertData($db_prefix.'transaction', $columns, $values)) {
+                        echo json_encode(['status' => true, 'pp_id' => $pp_id, 'pp_url' => 'https://' . $_SERVER['HTTP_HOST'] . '/payment/' . $pp_id]);
+                    } else {
+                        echo json_encode(['status' => false, 'message' => 'Unable to initialize payment. Please try again.']);
+                    }
                 }else{
+                    header('Content-Type: application/json');
                     echo json_encode(['status' => false, 'message' => 'Failed.']);
                 }
             }

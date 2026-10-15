@@ -225,7 +225,7 @@
                                             
                                             <script>
                                                 function load_transaction_slip(){
-                                                    $('.response-transaction-slip').html('<center><img src="<?php if(isset($response_transaction_checker['response'][0]['payment_verify_id'])){if($response_transaction_checker['response'][0]['payment_verify_id'] == "--"){echo 'https://cdn.piprapay.com/media/favicon.png';}else{echo $response_transaction_checker['response'][0]['payment_verify_id'];};}else{echo 'https://cdn.piprapay.com/media/favicon.png';}?>" style="margin-top: 10px;max-width: 200px;"></center>');
+                                                    $('.response-transaction-slip').html('<center><img src="<?php if(isset($response_transaction_checker['response'][0]['payment_verify_id'])){if($response_transaction_checker['response'][0]['payment_verify_id'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $response_transaction_checker['response'][0]['payment_verify_id'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>" style="margin-top: 10px;max-width: 200px;"></center>');
                                                 }
                                                 load_transaction_slip();
                                             </script>
@@ -373,13 +373,14 @@
                 var ids = [<?php echo $_GET['ref'];?>];
 
                 var formData = new FormData();
-                formData.append('action', 'pp_bulk_action_transaction');
-                formData.append('action_name', action);
-                formData.append('ids', ids);
-                
-                $.ajax({
-                    type: "POST",
-                    url: "/admin/transaction",
+formData.append('action', 'pp_bulk_action_transaction');
+                        formData.append('action_name', action);
+                        formData.append('ids', ids);
+                        formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
+                        
+                        $.ajax({
+                            type: "POST",
+                            url: "/admin/transaction",
                     data: formData,
                     processData: false,
                     contentType: false,

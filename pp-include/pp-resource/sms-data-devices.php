@@ -309,7 +309,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_generate_webhook"},
+                    data: { "action": "pp_generate_webhook", "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-arrow-repeat").innerHTML = '<i class="bi bi-arrow-repeat"></i>';
                         
@@ -369,7 +369,7 @@
               $.ajax({
                 type: "POST",
                 url: "/admin/dashboard",
-                data: { action: "pp_sms_data_devices", page: page, search: search, sms_status: sms_status },
+                data: { action: "pp_sms_data_devices", page: page, search: search, sms_status: sms_status, csrf_token: window.PP_CSRF_TOKEN || '' },
                 success: function (data) {
                     tbody.empty();
                     
@@ -477,6 +477,7 @@
                     formData.append('action', 'pp_bulk_action_devices');
                     formData.append('action_name', action);
                     formData.append('ids', ids);
+                    formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
                     
                     $.ajax({
                         type: "POST",

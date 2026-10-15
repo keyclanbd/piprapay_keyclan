@@ -67,7 +67,7 @@
                       <div class="col-sm-12">
                             <label for="sitename" class="col-sm-12 col-form-label form-label">API Key</label>
                             <div class="input-group">
-                                 <input type="text" class="form-control" name="api-key" id="api-key" placeholder="Enter api key" aria-label="Enter api key" value="<?php if($global_setting_response['response'][0]['api_key'] !== "--"){echo $global_setting_response['response'][0]['api_key'];}?>" readonly>
+                                 <input type="text" class="form-control" name="api-key" id="api-key" placeholder="Enter api key" aria-label="Enter api key" value="<?php if($global_setting_response['response'][0]['api_key'] !== "--"){echo '****'.htmlspecialchars(substr($global_setting_response['response'][0]['api_key'], -4));}?>" data-full-value="<?php if($global_setting_response['response'][0]['api_key'] !== "--"){echo htmlspecialchars($global_setting_response['response'][0]['api_key']);}?>" readonly>
                                  <span class="input-group-text" style="cursor:pointer" onclick="copyToClipboard('api-key')"><i class="bi bi-clipboard"></i></span>
                                  <span class="input-group-text btn-arrow-repeat" style="cursor:pointer" onclick="generateapi()"><i class="bi bi-arrow-repeat"></i></span>
                             </div>
@@ -109,12 +109,14 @@
                             </div>
                             <div class="text-secondary mt-2">Standard checkout integration</div>
                       </div>
-                      
+                    </div>
+
+                    <div class="row mb-4">
                       <div class="col-sm-6">
                             <label for="sitename" class="col-sm-12 col-form-label form-label">Verify Payment Endpoint</label>
                             <div class="input-group">
-                                 <input type="text" class="form-control" name="verify-payment" id="verify-payment" placeholder="Enter verify payment" aria-label="Enter verify payment" value="https://<?php echo $_SERVER['HTTP_HOST']?>/api/verify-payments" readonly>
-                                 <span class="input-group-text" style="cursor:pointer" onclick="copyToClipboard('verify-payment')"><i class="bi bi-clipboard"></i></span>
+                                 <input type="text" class="form-control" name="verify-payment-endpoint" id="verify-payment-endpoint" placeholder="Enter verify payment endpoint" aria-label="Enter verify payment endpoint" value="https://<?php echo $_SERVER['HTTP_HOST']?>/api/verify-payments" readonly>
+                                 <span class="input-group-text" style="cursor:pointer" onclick="copyToClipboard('verify-payment-endpoint')"><i class="bi bi-clipboard"></i></span>
                             </div>
                             <div class="text-secondary mt-2">Use this to verify payment status</div>
                       </div>
@@ -132,13 +134,62 @@
         <script> 
           function copyToClipboard(inputs) {
             const input = document.getElementById(inputs);
-            input.select();
-            input.setSelectionRange(0, 99999); 
-        
-            navigator.clipboard.writeText(input.value)
-              .then(() => {
+            const valueToCopy = input?.dataset?.fullValue || input.value;
 
-              });
+            if (input && input.select) {
+                input.select();
+                input.setSelectionRange(0, 99999);
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(valueToCopy)
+                  .catch(() => {
+                      fallbackCopy(valueToCopy);
+                  });
+            } else {
+                fallbackCopy(valueToCopy);
+            }
+
+            function fallbackCopy(text) {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            }
+          }
+
+          function generatewebhook(){
+              document.querySelector(".btn-generate-webhook").innerHTML = '<div class="spinner-border text-primary spinner-border-sm" role="status"> <span class="visually-hidden">Loading...</span> </div>';
+              
+                $.ajax
+                ({
+                    type: "POST",
+                    url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
+                    data: { "action": "pp_generate_webhook", "csrf_token": window.PP_CSRF_TOKEN || ''},
+                    success: function (data) {
+                        document.querySelector(".btn-generate-webhook").innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+                        
+                        var dedata = JSON.parse(data);
+                        
+                        if (dedata.status === "true" && (dedata.api || dedata.webhook)) {
+                            const webhookKey = dedata.api || dedata.webhook;
+                            const fullUrl = 'https://<?php echo $_SERVER['HTTP_HOST']?>/?webhook=' + webhookKey;
+                            const input = document.querySelector("#verify-payment");
+                            input.value = fullUrl;
+                            input.dataset.fullValue = fullUrl;
+                        } else if (dedata.message) {
+                            alert(dedata.message);
+                        }
+                    },
+                    error: function () {
+                        document.querySelector(".btn-generate-webhook").innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+                        alert('Unable to generate webhook url');
+                    }
+                });
           }
         
             function generateapi(){
@@ -148,13 +199,22 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_generate_api"},
+                    data: { "action": "pp_generate_api", "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-arrow-repeat").innerHTML = '<i class="bi bi-arrow-repeat"></i>';
                         
                         var dedata = JSON.parse(data);
                         
-                        document.querySelector("#api-key").value = dedata.api;
+                        if (dedata.status === "true" && dedata.api) {
+                            document.querySelector("#api-key").value = '****' + dedata.api.slice(-4);
+                        } else if (dedata.message) {
+                            document.querySelector("#api-key").value = '';
+                            alert(dedata.message);
+                        }
+                    },
+                    error: function () {
+                        document.querySelector(".btn-arrow-repeat").innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+                        alert('Unable to generate api key');
                     }
                 });
             }

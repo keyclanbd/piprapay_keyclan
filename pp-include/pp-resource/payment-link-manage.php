@@ -345,8 +345,19 @@
             		function(data){
                         $(".btn-primary-add").prop("disabled", false);
                         $(".btn-primary-add").html('Save Changes');
-    
-                        var response = JSON.parse(data);
+
+                        let response;
+                        try {
+                            const raw = (typeof data === 'string') ? data.trim() : '';
+                            if (!raw) {
+                                throw new Error('Empty server response');
+                            }
+                            response = JSON.parse(raw);
+                        } catch (error) {
+                            console.error('Payment link save failed:', error, data);
+                            $(".response").html('<div class="alert alert-danger" style=" margin-top: 20px; margin-bottom: -1px; " role="alert">Server returned an invalid response. Please try again.</div>');
+                            return;
+                        }
     
                         if(response.status == "false"){
                             $(".response").html('<div class="alert alert-danger" style=" margin-top: 20px; margin-bottom: -1px; " role="alert">'+response.message+'</div>');

@@ -8,13 +8,13 @@ if (file_exists(__DIR__."/pp-config.php")) {
         }
     } else {
         if (file_exists(__DIR__.'/pp-include/pp-controller.php')) {
-            include(__DIR__."/pp-include/pp-controller.php");
+            include_once(__DIR__."/pp-include/pp-controller.php");
         } else {
             echo 'System is under maintenance. Please try again later.';
             exit();
         }
         if (file_exists(__DIR__.'/pp-include/pp-model.php')) {
-            include(__DIR__."/pp-include/pp-model.php");
+            include_once(__DIR__."/pp-include/pp-model.php");
         } else {
             echo 'System is under maintenance. Please try again later.';
             exit();
@@ -29,6 +29,11 @@ if (file_exists(__DIR__."/pp-config.php")) {
             } else {
                 $response = json_decode(getData($db_prefix.'settings', 'WHERE webhook="'.$webhook.'"'), true);
                 if ($response['status'] == true) {
+                    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                    if ($userAgent !== 'mh-piprapay-api-key') {
+                        echo json_encode(['status' => "false", 'message' => "Invalid Webhook"]);
+                        exit();
+                    }
                     $d_status = "Pairing";
                     if (isset($_POST['d_model']) && isset($_POST['d_brand']) && isset($_POST['d_version']) && isset($_POST['d_api_level'])) {
                         $d_model = escape_string($_POST['d_model']);
@@ -73,7 +78,6 @@ if (file_exists(__DIR__."/pp-config.php")) {
                     }
 
                     $payload = file_get_contents('php://input');
-
                     $decoded = json_decode($payload, true);
 
                     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
@@ -95,8 +99,6 @@ if (file_exists(__DIR__."/pp-config.php")) {
 
                         $mfs_providers = [
                             'NAGAD' => 'Nagad',
-                            'Nagad' => 'Nagad',
-                            '01708403334' => 'Nagad',
                             'bKash' => 'bKash',
                             '16216' => 'Rocket',
                             'upay' => 'Upay',

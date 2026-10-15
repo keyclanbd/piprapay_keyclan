@@ -249,12 +249,15 @@
             type: "POST",
             url: "/admin/dashboard",
             data: { action: "pp_customer_list", page: page, search: search },
+            headers: {
+                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
             success: function (data) {
                 tbody.empty();
                 
               const dedata = JSON.parse(data);
         
-              if (dedata.total === 0) {
+              if (!dedata || !dedata.data || dedata.total === 0) {
                 tbody.html(`
                     <tr class="odd">
                         <td valign="top" colspan="5" class="dataTables_empty">
@@ -269,7 +272,7 @@
                 totalPages = 1;
               } else {
                 totalPages = dedata.totalPages;
-                dedata.data.forEach(tx => {
+                (dedata.data || []).forEach(tx => {
                   tbody.append(`
                     <tr>
                       <td><input type="checkbox" class="form-check-input select-box" value="${tx.id || "--"}"></td>
@@ -372,7 +375,7 @@
             ({
                 type: "POST",
                 url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                data: { "action": "pp_addcustomer", "c_name": c_name, "c_email_mobile": c_email_mobile},
+                data: { "action": "pp_addcustomer", "c_name": c_name, "c_email_mobile": c_email_mobile, "csrf_token": window.PP_CSRF_TOKEN || ''},
                 success: function (data) {
                     document.querySelector(".btn-model-currency-rate-saved").innerHTML = 'Add New';
                     
@@ -401,7 +404,7 @@
             ({
                 type: "POST",
                 url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                data: { "action": "pp_editcustomer", "id": modelid, "c_name": c_name, "c_email_mobile": c_email_mobile, "status": status},
+                data: { "action": "pp_editcustomer", "id": modelid, "c_name": c_name, "c_email_mobile": c_email_mobile, "status": status, "csrf_token": window.PP_CSRF_TOKEN || ''},
                 success: function (data) {
                     document.querySelector(".btn-model-currency-rate-saved"+modelid).innerHTML = 'Add New';
                     
@@ -436,11 +439,12 @@
                 $(".response-bulk-action").html('<div class="alert alert-danger" style="margin-top: 20px; margin-bottom: -1px;" role="alert">Please select at least one record to delete.</div>');
             }else{
                 var formData = new FormData();
-                formData.append('action', 'pp_bulk_action_customer');
-                formData.append('action_name', action);
-                formData.append('ids', ids);
-                
-                $.ajax({
+                    formData.append('action', 'pp_bulk_action_customer');
+                    formData.append('action_name', action);
+                    formData.append('ids', ids);
+                    formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
+                    
+                    $.ajax({
                     type: "POST",
                     url: "/admin/customers",
                     data: formData,

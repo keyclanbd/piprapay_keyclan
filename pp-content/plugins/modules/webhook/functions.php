@@ -40,7 +40,10 @@
         }
         
         if($webhook_url !== "--"){
-           webhook_plugin_send_request($webhook_url, $payload, $extra_headers);
+            register_shutdown_function(function() use ($webhook_url, $payload, $extra_headers) {
+                ignore_user_abort(true);
+                webhook_plugin_send_request($webhook_url, $payload, $extra_headers);
+            });
         }
     }
     
@@ -52,11 +55,12 @@
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
 
-        // Merge default header with custom header
         $headers = array_merge(['Content-Type: application/json'], $extra_headers);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);

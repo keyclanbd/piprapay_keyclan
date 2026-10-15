@@ -1105,9 +1105,10 @@
                         $(".response-bulk-action").html('<div class="alert alert-danger" style="margin-top: 20px; margin-bottom: -1px;" role="alert">Please select at least one record to delete.</div>');
                     }else{
                         var formData = new FormData();
-                        formData.append('action', 'bulk_action_transaction');
+                        formData.append('action', 'pp_bulk_action_transaction');
                         formData.append('action_name', action);
                         formData.append('ids', ids);
+                        formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
                         
                         $.ajax({
                             type: "POST",
@@ -1153,7 +1154,7 @@
                   $.ajax({
                     type: "POST",
                     url: "/admin/dashboard",
-                    data: { action: "pp_transaction", visibility: "limited", page: page, search: search, transaction_status: transaction_status },
+                    data: { action: "pp_transaction", visibility: "limited", page: page, search: search, transaction_status: transaction_status, csrf_token: window.PP_CSRF_TOKEN || '' },
                     success: function (data) {
                         tbody.empty();
                         
@@ -1573,6 +1574,7 @@
                         formData.append('action', 'pp_bulk_action_transaction');
                         formData.append('action_name', action);
                         formData.append('ids', ids);
+                        formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
                         
                         $.ajax({
                             type: "POST",

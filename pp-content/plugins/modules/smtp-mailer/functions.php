@@ -162,6 +162,7 @@
         $mail->Password   = $smtp_settings['password'];
         $mail->SMTPSecure = $smtp_settings['secure']; // 'tls' or 'ssl'
         $mail->Port       = $smtp_settings['port'];
+        $mail->Timeout    = 10;
     
         // Sender & Recipient
         $mail->setFrom($smtp_settings['username'], $smtp_settings['from']);
@@ -339,6 +340,7 @@
         $mail->Password   = $smtp_settings['password'];
         $mail->SMTPSecure = $smtp_settings['secure']; // 'tls' or 'ssl'
         $mail->Port       = $smtp_settings['port'];
+        $mail->Timeout    = 10;
     
         // Sender & Recipient
         $mail->setFrom($smtp_settings['username'], $smtp_settings['from']);
@@ -773,6 +775,7 @@
             $mail->Password   = $smtp_settings['password'];
             $mail->SMTPSecure = $smtp_settings['secure']; // 'tls' or 'ssl'
             $mail->Port       = $smtp_settings['port'];
+        $mail->Timeout    = 10;
             
             // Recipients
             $mail->setFrom($smtp_settings['username'], $setting['response'][0]['site_name']);

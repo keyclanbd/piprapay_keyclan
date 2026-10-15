@@ -357,7 +357,7 @@
                     <div class="input-group">
                          <input type="text" class="form-control" name="webhook-url" id="webhook-url" placeholder="Enter webhook url" aria-label="Enter webhook url" value="https://<?php echo $_SERVER['HTTP_HOST']?>/?webhook=<?php if($global_setting_response['response'][0]['webhook'] !== "--"){echo $global_setting_response['response'][0]['webhook'];}?>" readonly>
                          <span class="input-group-text" style="cursor:pointer" onclick="copyToClipboard('webhook-url')"><i class="bi bi-clipboard"></i></span>
-                         <span class="input-group-text btn-arrow-repeat" style="cursor:pointer" onclick="generateapi()"><i class="bi bi-arrow-repeat"></i></span>
+                         <span class="input-group-text btn-generate-webhook" style="cursor:pointer" onclick="generatewebhook()"><i class="bi bi-arrow-repeat"></i></span>
                     </div>
 
                   </div>
@@ -392,29 +392,45 @@
         
           function copyToClipboard(inputs) {
             const input = document.getElementById(inputs);
-            input.select();
-            input.setSelectionRange(0, 99999); 
+            const valueToCopy = input?.dataset?.fullValue || input.value;
+
+            if (input && input.select) {
+                input.select();
+                input.setSelectionRange(0, 99999);
+            }
         
-            navigator.clipboard.writeText(input.value)
+            navigator.clipboard.writeText(valueToCopy)
               .then(() => {
 
               });
           }
         
-            function generateapi(){
-              document.querySelector(".btn-arrow-repeat").innerHTML = '<div class="spinner-border text-primary spinner-border-sm" role="status"> <span class="visually-hidden">Loading...</span> </div>';
+            function generatewebhook(){
+              document.querySelector(".btn-generate-webhook").innerHTML = '<div class="spinner-border text-primary spinner-border-sm" role="status"> <span class="visually-hidden">Loading...</span> </div>';
               
                 $.ajax
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_generate_webhook"},
+                    data: { "action": "pp_generate_webhook", "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
-                        document.querySelector(".btn-arrow-repeat").innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+                        document.querySelector(".btn-generate-webhook").innerHTML = '<i class="bi bi-arrow-repeat"></i>';
                         
                         var dedata = JSON.parse(data);
                         
-                        document.querySelector("#webhook-url").value = 'https://<?php echo $_SERVER['HTTP_HOST']?>/?webhook='+dedata.api;
+                        if (dedata.status === "true" && (dedata.api || dedata.webhook)) {
+                            const webhookKey = dedata.api || dedata.webhook;
+                            const fullUrl = 'https://<?php echo $_SERVER['HTTP_HOST']?>/?webhook=' + webhookKey;
+                            const input = document.querySelector("#webhook-url");
+                            input.value = fullUrl;
+                            input.dataset.fullValue = fullUrl;
+                        } else if (dedata.message) {
+                            alert(dedata.message);
+                        }
+                    },
+                    error: function () {
+                        document.querySelector(".btn-generate-webhook").innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+                        alert('Unable to generate webhook url');
                     }
                 });
             }
@@ -493,7 +509,7 @@
               $.ajax({
                 type: "POST",
                 url: "/admin/dashboard",
-                data: { action: "pp_sms_data_list", page: page, search: search, sms_status: sms_status },
+                data: { action: "pp_sms_data_list", page: page, search: search, sms_status: sms_status, csrf_token: window.PP_CSRF_TOKEN || '' },
                 success: function (data) {
                     tbody.empty();
                     
@@ -669,7 +685,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/sms-data",
-                    data: { "action": "pp_sms-edit-message", "method": method, "amount": amount, "phone_number": phone_number, "transaction_id": transaction_id, "sim_slot": sim_slot, "status": status, "sms_id": id},
+                    data: { "action": "pp_sms-edit-message", "method": method, "amount": amount, "phone_number": phone_number, "transaction_id": transaction_id, "sim_slot": sim_slot, "status": status, "sms_id": id, "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-insert-new-message"+id).innerHTML = 'Save Changes';
                         
@@ -736,6 +752,7 @@
                     formData.append('action', 'pp_bulk_action_sms_data');
                     formData.append('action_name', action);
                     formData.append('ids', ids);
+                    formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
                     
                     $.ajax({
                         type: "POST",
@@ -775,7 +792,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/sms-data",
-                    data: { "action": "pp_sms-new-message", "method": method, "amount": amount, "phone_number": phone_number, "transaction_id": transaction_id, "sim_slot": sim_slot, "status": status},
+                    data: { "action": "pp_sms-new-message", "method": method, "amount": amount, "phone_number": phone_number, "transaction_id": transaction_id, "sim_slot": sim_slot, "status": status, "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-insert-new-message").innerHTML = 'Create';
                         

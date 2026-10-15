@@ -1,4 +1,9 @@
 <?php
+    // Hard guard: never expose the installer once deployed.
+    if (file_exists(__DIR__ . '/../install.lock') || file_exists(__DIR__ . '/../pp-config.php')) {
+        http_response_code(403);
+        die('Installer is disabled. Delete install/ directory on production.');
+    }
     if (file_exists(__DIR__."/../pp-config.php")) {
 ?>
         <script>
@@ -50,124 +55,162 @@
     $is_requirment_fill = true;
     
     if (isset($_POST['install'])) {
-        $datahost = $_POST['datahost'];
-        $dataport = $_POST['dataport'];
-        $dbName   = $_POST['dbName'];
-        $dbPrefix = $_POST['dbPrefix'];
-        $dbUser   = $_POST['dbUser'];
-        $dbPass   = $_POST['dbPass'];
-    
-        $adminName = $_POST['adminName'];
-        $adminEmail = $_POST['adminEmail'];
-        $adminUser = $_POST['adminUser'];
-        $adminPass = $_POST['adminPass'];
-    
-        // Validate
-        if (empty($datahost) || empty($dataport) || empty($dbName) || empty($dbPrefix) || empty($dbUser)) {
-            echo json_encode(["status" => "false", "message" => "Error: All database connection fields are required."]);
-            exit();
-        }
-    
-        if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
-            echo json_encode(["status" => "false", "message" => "Error: Invalid administrator email address."]);
-            exit();
-        }
-    
-        // Connect to DB
-        $conn = new mysqli($datahost, $dbUser, $dbPass, $dbName, $dataport);
-        if ($conn->connect_error) {
-            echo json_encode(["status" => "false", "message" => "Error: Database connection failed."]);
-            exit();
-        }
-    
-        // Save config.php
-        $configContent = "<?php
-    \$db_host = '$datahost';
-    \$db_user = '$dbUser';
-    \$db_pass = '$dbPass';
-    \$db_name = '$dbName';
-    \$db_prefix = '$dbPrefix';
-    \$mode = 'live';
-    \$password_reset = 'off';
-?>";
-    
-        file_put_contents('../pp-config.php', $configContent);
-    
-        // Load and import SQL with prefix
-        $sqlUrl = "database.sql";
-        $sql = file_get_contents($sqlUrl);
-        if ($sql === false) {
-            echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
-            exit();
-        }
-    
-        // Replace __PREFIX__ with actual prefix
-        $sql = str_replace("__PREFIX__", $dbPrefix, $sql);
-    
-        // Execute all queries
-        $queries = array_filter(array_map('trim', explode(";", $sql)));
-        foreach ($queries as $query) {
-            if (!empty($query)) {
-                $conn->query($query);
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            if (file_exists(__DIR__ . '/../install.lock') || file_exists(__DIR__ . '/../maintenance.lock')) {
+                echo json_encode(["status" => "false", "message" => "Installation is locked."]);
+                exit();
             }
-        }
+
+            $datahost = trim((string) ($_POST['datahost'] ?? ''));
+            $dataport = (int) ($_POST['dataport'] ?? 0);
+            $dbName   = trim((string) ($_POST['dbName'] ?? ''));
+            $dbPrefix = trim((string) ($_POST['dbPrefix'] ?? ''));
+            $dbUser   = trim((string) ($_POST['dbUser'] ?? ''));
+            $dbPass   = (string) ($_POST['dbPass'] ?? '');
+        
+            $adminName = trim((string) ($_POST['adminName'] ?? ''));
+            $adminEmail = trim((string) ($_POST['adminEmail'] ?? ''));
+            $adminUser = trim((string) ($_POST['adminUser'] ?? ''));
+            $adminPass = (string) ($_POST['adminPass'] ?? '');
+        
+            // Validate
+            if (empty($datahost) || $dataport < 1 || $dataport > 65535 || empty($dbName) || empty($dbPrefix) || empty($dbUser)) {
+                echo json_encode(["status" => "false", "message" => "Error: All database connection fields are required."]);
+                exit();
+            }
+            if (!preg_match('/^[A-Za-z0-9_]{1,32}$/', $dbPrefix)) {
+                echo json_encode(["status" => "false", "message" => "Error: Invalid database prefix."]);
+                exit();
+            }
+            if (strlen($adminPass) < 8 || strlen($adminUser) > 100 || $adminName === '') {
+                echo json_encode(["status" => "false", "message" => "Error: Invalid administrator details."]);
+                exit();
+            }
+        
+            if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+                echo json_encode(["status" => "false", "message" => "Error: Invalid administrator email address."]);
+                exit();
+            }
+        
+            // Connect to DB without fatal exceptions
+            mysqli_report(MYSQLI_REPORT_OFF);
+            $conn = @new mysqli($datahost, $dbUser, $dbPass, $dbName, $dataport);
+            if ($conn->connect_error) {
+                echo json_encode(["status" => "false", "message" => "Error: Database connection failed: " . $conn->connect_error]);
+                exit();
+            }
+        
+            // Save config.php
+            $configContent = "<?php\n" .
+                "\$db_host = " . var_export($datahost, true) . ";\n" .
+                "\$db_user = " . var_export($dbUser, true) . ";\n" .
+                "\$db_pass = " . var_export($dbPass, true) . ";\n" .
+                "\$db_name = " . var_export($dbName, true) . ";\n" .
+                "\$db_prefix = " . var_export($dbPrefix, true) . ";\n" .
+                "\$mode = " . var_export('live', true) . ";\n" .
+                "\$password_reset = " . var_export('off', true) . ";\n?>";
+        
+            file_put_contents(__DIR__ . '/../pp-config.php', $configContent);
+        
+            // Load and import SQL with prefix
+            $sqlUrl = __DIR__ . "/database.sql";
+            $sql = file_get_contents($sqlUrl);
+            if ($sql === false) {
+                echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
+                exit();
+            }
     
-        $sqlUrlCurrency = "currency.sql";
-        $sqlContentCurrency = file_get_contents($sqlUrlCurrency);
+            // Replace __PREFIX__ with actual prefix
+            $sql = str_replace("__PREFIX__", $dbPrefix, $sql);
         
-        if ($sqlContentCurrency === false) {
-            echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
-            exit();
-        }
+            // Execute all queries
+            $queries = array_filter(array_map('trim', explode(";", $sql)));
+            foreach ($queries as $query) {
+                if (!empty($query) && !$conn->query($query)) {
+                    $conn->close();
+                    @unlink(__DIR__ . '/../pp-config.php');
+                    echo json_encode(["status" => "false", "message" => "Error: Database schema installation failed."]);
+                    exit();
+                }
+            }
         
-        // Replace old table name with your real one
-        $sqlContentCurrency = str_replace("INSERT INTO `currency`", "INSERT INTO `{$dbPrefix}currency`", $sqlContentCurrency);
-        
-        // Run the modified SQL
-        if ($conn->multi_query($sqlContentCurrency)) {
-            do {
-                $conn->store_result();
-            } while ($conn->more_results() && $conn->next_result());
-        } else {
-            echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
-            exit();
-        }
-
-        $sqlUrlTimezone = "timezone.sql";
-        $sqlContentTimezone = file_get_contents($sqlUrlTimezone);
-        
-        if ($sqlContentTimezone === false) {
-            echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
-            exit();
-        }
-        
-        // Replace old table name with your real one
-        $sqlContentTimezone = str_replace("INSERT INTO `timezone`", "INSERT INTO `{$dbPrefix}timezone`", $sqlContentTimezone);
-        
-        // Run the modified SQL
-        if ($conn->multi_query($sqlContentTimezone)) {
-            do {
-                $conn->store_result();
-            } while ($conn->more_results() && $conn->next_result());
-        } else {
-            echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
-            exit();
-        }
-
-        // Insert admin user
-        $hashedPass = password_hash($adminPass, PASSWORD_BCRYPT);
-        $insertAdmin = "INSERT INTO `{$dbPrefix}admins` (name, email, username, password) VALUES 
-                       ('" . $conn->real_escape_string($adminName) . "', 
-                        '" . $conn->real_escape_string($adminEmail) . "', 
-                        '" . $conn->real_escape_string($adminUser) . "', 
-                        '" . $conn->real_escape_string($hashedPass) . "')";
-        $conn->query($insertAdmin);
+            $sqlUrlCurrency = __DIR__ . "/currency.sql";
+            $sqlContentCurrency = file_get_contents($sqlUrlCurrency);
             
-        $insertSettings = "INSERT INTO `{$dbPrefix}settings` (site_name) VALUES ('--')";
-        $conn->query($insertSettings);
-                   
-        echo json_encode(["status" => "true", "message" => "Installation completed successfully."]);
-        exit();
+            if ($sqlContentCurrency === false) {
+                echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
+                exit();
+            }
+            
+            // Replace old table name with your real one
+            $sqlContentCurrency = str_replace("INSERT INTO `currency`", "INSERT INTO `{$dbPrefix}currency`", $sqlContentCurrency);
+            
+            // Run the modified SQL
+            if ($conn->multi_query($sqlContentCurrency)) {
+                do {
+                    $conn->store_result();
+                } while ($conn->more_results() && $conn->next_result());
+            } else {
+                echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
+                exit();
+            }
+
+            $sqlUrlTimezone = __DIR__ . "/timezone.sql";
+            $sqlContentTimezone = file_get_contents($sqlUrlTimezone);
+            
+            if ($sqlContentTimezone === false) {
+                echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
+                exit();
+            }
+            
+            // Replace old table name with your real one
+            $sqlContentTimezone = str_replace("INSERT INTO `timezone`", "INSERT INTO `{$dbPrefix}timezone`", $sqlContentTimezone);
+            
+            // Run the modified SQL
+            if ($conn->multi_query($sqlContentTimezone)) {
+                do {
+                    $conn->store_result();
+                } while ($conn->more_results() && $conn->next_result());
+            } else {
+                echo json_encode(["status" => "false", "message" => "Error: Failed to fetch SQL file."]);
+                exit();
+            }
+
+            // Insert admin user
+            $hashedPass = password_hash($adminPass, PASSWORD_BCRYPT);
+            $insertAdmin = "INSERT INTO `{$dbPrefix}admins` (name, email, username, password) VALUES 
+                           ('" . $conn->real_escape_string($adminName) . "', 
+                            '" . $conn->real_escape_string($adminEmail) . "', 
+                            '" . $conn->real_escape_string($adminUser) . "', 
+                            '" . $conn->real_escape_string($hashedPass) . "')";
+            if (!$conn->query($insertAdmin)) {
+                $conn->close();
+                @unlink(__DIR__ . '/../pp-config.php');
+                echo json_encode(["status" => "false", "message" => "Error: Administrator creation failed."]);
+                exit();
+            }
+                
+            $insertSettings = "INSERT INTO `{$dbPrefix}settings` (site_name) VALUES ('--')";
+            if (!$conn->query($insertSettings)) {
+                $conn->close();
+                @unlink(__DIR__ . '/../pp-config.php');
+                echo json_encode(["status" => "false", "message" => "Error: Settings initialization failed."]);
+                exit();
+            }
+            $conn->close();
+            file_put_contents(__DIR__ . '/../install.lock', (string) time(), LOCK_EX);
+            echo json_encode(["status" => "true", "message" => "Installation completed successfully."]);
+            exit();
+        } catch (Throwable $e) {
+            if (isset($conn) && $conn instanceof mysqli) {
+                $conn->close();
+            }
+            @unlink(__DIR__ . '/../pp-config.php');
+            http_response_code(500);
+            echo json_encode(["status" => "false", "message" => "Installation failed."]);
+            exit();
+        }
     }
     
     if (isset($_POST['test'])) {
@@ -178,6 +221,7 @@
         $dbUser   = $_POST['dbUser'];
         $dbPass   = $_POST['dbPass'];
         
+        mysqli_report(MYSQLI_REPORT_OFF);
         $conn = @new mysqli($datahost, $dbUser, $dbPass, $dbName, $dataport);
     
         if ($conn->connect_error) {
@@ -202,7 +246,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PipraPay - Script Installer</title>
-    <link rel="icon" type="image/x-icon" href="https://cdn.piprapay.com/media/favicon.png">
+    <link rel="icon" type="image/x-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=">
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -682,8 +726,8 @@
                         var dbUser =document.querySelector("#dbUser").value;
                         var dbPass =document.querySelector("#dbPass").value;
                         
-                        if(datahost == "" || dataport == "" || dbName == "" || dbPrefix == "" || dbUser == "" || dbPass == ""){
-                            document.querySelector(".db-connection-response").innerHTML = '<div class="alert alert-danger"> <i class="fa fa-info-circle me-2"></i> Error: All database connection fields (host, username, database name) are required.</div>';
+                        if(datahost == "" || dataport == "" || dbName == "" || dbPrefix == "" || dbUser == ""){
+                            document.querySelector(".db-connection-response").innerHTML = '<div class="alert alert-danger"> <i class="fa fa-info-circle me-2"></i> Error: All database connection fields (host, port, username, database name) are required.</div>';
                         }else{
                             document.querySelector(".db-connection-response").innerHTML = '';
                             currentStep++;

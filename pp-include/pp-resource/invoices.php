@@ -295,7 +295,7 @@
               $.ajax({
                 type: "POST",
                 url: "/admin/dashboard",
-                data: { action: "pp_invoice_list", page: page, search: search, payment_link_status: payment_link_status },
+                data: { action: "pp_invoice_list", page: page, search: search, payment_link_status: payment_link_status, csrf_token: window.PP_CSRF_TOKEN || '' },
                 success: function (data) {
                     tbody.empty();
                     
@@ -420,6 +420,7 @@
                     formData.append('action', 'pp_bulk_action_invoice');
                     formData.append('action_name', action);
                     formData.append('ids', ids);
+                    formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
                     
                     $.ajax({
                         type: "POST",

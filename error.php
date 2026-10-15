@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Error - PipraPay</title>
-    <link rel="icon" type="image/x-icon" href="https://cdn.piprapay.com/media/favicon.png">
+    <link rel="icon" type="image/x-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=">
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -207,9 +207,9 @@
                     
                     <i class="fas fa-exclamation-triangle error-icon"></i>
                     <div class="error-code">404</div>
-                    <h2 class="mb-3 fw-bold"><?php echo $error_title ?? 'Page Not Found';?></h2>
+                    <h2 class="mb-3 fw-bold"><?php echo htmlspecialchars($error_title ?? 'Page Not Found');?></h2>
                     <div class="error-divider"></div>
-                    <p class="mb-4 text-muted"><?php echo $error_description ?? 'The page you requested could not be found. It might have been moved or deleted.';?></p>
+                    <p class="mb-4 text-muted"><?php echo htmlspecialchars($error_description ?? 'The page you requested could not be found. It might have been moved or deleted.');?></p>
                 </div>
             </div>
         </div>

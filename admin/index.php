@@ -9,21 +9,21 @@
             exit();
         }else{
             if (file_exists(__DIR__.'/../pp-include/pp-controller.php')) {
-                include(__DIR__."/../pp-include/pp-controller.php");
+                include_once(__DIR__."/../pp-include/pp-controller.php");
             }else{
                 echo 'System is under maintenance. Please try again later.';
                 exit();
             }
             
             if (file_exists(__DIR__.'/../pp-include/pp-model.php')) {
-                include(__DIR__."/../pp-include/pp-model.php");
+                include_once(__DIR__."/../pp-include/pp-model.php");
             }else{
                 echo 'System is under maintenance. Please try again later.';
                 exit();
             }
             
             if (file_exists(__DIR__.'/../pp-include/pp-view.php')) {
-                include(__DIR__."/../pp-include/pp-view.php");
+                include_once(__DIR__."/../pp-include/pp-view.php");
             }else{
                 echo 'System is under maintenance. Please try again later.';
                 exit();
@@ -58,6 +58,14 @@
         exit();
     }
     
+    if(isset($_GET['logout'])){
+        if(function_exists('logoutCookie')){
+            logoutCookie();
+        }
+        header('Location: https://' . $_SERVER['HTTP_HOST'] . '/admin/login');
+        exit();
+    }
+    
     if (function_exists('pp_trigger_hook')) {
         pp_trigger_hook('pp_admin_initialize');
     }
@@ -69,9 +77,14 @@
   <meta charset="utf-8">
   <meta name="robots" content="noindex, nofollow">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="csrf-token" content="<?php echo generateCsrfToken(); ?>">
+  <script>
+    window.PP_CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    window.PP_CSRF_HEADER = { 'X-CSRF-Token': window.PP_CSRF_TOKEN };
+  </script>
 
   <title>Dashboard - PipraPay</title>
-  <link rel="icon" type="image/x-icon" href="https://cdn.piprapay.com/media/favicon.png">
+  <link rel="icon" type="image/x-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=">
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;display=swap" rel="stylesheet">
 
@@ -205,10 +218,10 @@
     <div class="navbar-nav-wrap">
       <!-- Logo -->
       <a class="navbar-brand" href="javascript:void(0)" aria-label="Front">
-        <img class="navbar-brand-logo" src="https://cdn.piprapay.com/media/logo.png" alt="Logo" data-hs-theme-appearance="default">
-        <img class="navbar-brand-logo" src="https://cdn.piprapay.com/media/logo-black.png" alt="Logo" data-hs-theme-appearance="dark">
-        <img class="navbar-brand-logo-mini" src="https://cdn.piprapay.com/media/favicon.png" alt="Logo" data-hs-theme-appearance="default">
-        <img class="navbar-brand-logo-mini" src="https://cdn.piprapay.com/media/favicon.png" alt="Logo" data-hs-theme-appearance="dark">
+        <img class="navbar-brand-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="default">
+        <img class="navbar-brand-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="dark">
+        <img class="navbar-brand-logo-mini" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="default">
+        <img class="navbar-brand-logo-mini" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="dark">
       </a>
       <!-- End Logo -->
 
@@ -227,7 +240,7 @@
             <div class="dropdown">
               <a class="navbar-dropdown-account-wrapper" href="javascript:;" id="accountNavbarDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside" data-bs-dropdown-animation>
                 <div class="avatar avatar-sm avatar-circle">
-                  <img class="avatar-img" src="https://cdn.piprapay.com/media/default.jpg" alt="Image Description">
+                  <img class="avatar-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Image Description">
                   <span class="avatar-status avatar-sm-status avatar-status-success"></span>
                 </div>
               </a>
@@ -236,7 +249,7 @@
                 <div class="dropdown-item-text">
                   <div class="d-flex align-items-center">
                     <div class="avatar avatar-sm avatar-circle">
-                      <img class="avatar-img" src="https://cdn.piprapay.com/media/default.jpg" alt="Image Description">
+                      <img class="avatar-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Image Description">
                     </div>
                     <div class="flex-grow-1 ms-3">
                       <h5 class="mb-0"><?php echo $global_user_response['response'][0]['name']?></h5>
@@ -268,10 +281,10 @@
         <!-- Logo -->
 
         <a class="navbar-brand" href="javascript:void(0)" aria-label="Front">
-          <img class="navbar-brand-logo" src="https://cdn.piprapay.com/media/logo.png" alt="Logo" data-hs-theme-appearance="default">
-          <img class="navbar-brand-logo" src="https://cdn.piprapay.com/media/logo-black.png" alt="Logo" data-hs-theme-appearance="dark">
-          <img class="navbar-brand-logo-mini" src="https://cdn.piprapay.com/media/favicon.png" alt="Logo" data-hs-theme-appearance="default">
-          <img class="navbar-brand-logo-mini" src="https://cdn.piprapay.com/media/favicon.png" alt="Logo" data-hs-theme-appearance="dark">
+          <img class="navbar-brand-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="default">
+          <img class="navbar-brand-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="dark">
+          <img class="navbar-brand-logo-mini" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="default">
+          <img class="navbar-brand-logo-mini" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="dark">
         </a>
 
         <!-- End Logo -->
@@ -405,7 +418,7 @@
                     });
                     
                     foreach ($mainFolders as $mainFolder) {
-                        $mainFolder_rand = rand();
+                        $mainFolder_rand = random_int(100000, 999999);
                 ?>
                         <!-- Collapse -->
                         <div class="nav-item">
@@ -600,6 +613,33 @@
 
   <script src="https://<?php echo $_SERVER['HTTP_HOST']?>/pp-external/assets/admin/assets/js/demo.js?v=1.8"></script>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+   <script>
+       $.ajaxSetup({
+           beforeSend: function(xhr, settings) {
+               if (settings.type === 'POST') {
+                   xhr.setRequestHeader('X-CSRF-Token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
+               }
+           }
+       });
+       // Auto-inject CSRF token into every form (covers .serialize() and new FormData(form) posts).
+       (function () {
+           function injectToken(scope) {
+               var meta = document.querySelector('meta[name="csrf-token"]');
+               if (!meta) return;
+               (scope || document).querySelectorAll('form').forEach(function (form) {
+                   if (!form.querySelector('input[name="csrf_token"]')) {
+                       var input = document.createElement('input');
+                       input.type = 'hidden';
+                       input.name = 'csrf_token';
+                       input.value = meta.getAttribute('content');
+                       form.appendChild(input);
+                   }
+               });
+           }
+           document.addEventListener('DOMContentLoaded', function () { injectToken(document); });
+           new MutationObserver(function () { injectToken(document); }).observe(document.documentElement, { childList: true, subtree: true });
+       })();
+   </script>
   <script src="https://<?php echo $_SERVER['HTTP_HOST']?>/pp-external/assets/admin/assets/js/vendor.min.js"></script>
 
   <script src="https://<?php echo $_SERVER['HTTP_HOST']?>/pp-external/assets/admin/assets/vendor/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js"></script>
@@ -627,10 +667,13 @@
           
           document.querySelector(".btn-add-themes-plugins").innerHTML = '<div class="spinner-border spinner-border-sm text-white" role="status"> <span class="visually-hidden">Loading...</span> </div>';
         
-          fetch("dashboard", {
-            method: "POST",
-            body: formData
-          })
+fetch("dashboard", {
+             method: "POST",
+             headers: {
+                 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+             },
+             body: formData
+           })
           .then(res => res.json())
           .then(data => {
               document.querySelector(".btn-add-themes-plugins").innerHTML = 'Upload';
@@ -733,6 +776,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 },
                 body: new URLSearchParams({ webpage: cleanPath })
             })
@@ -777,7 +821,7 @@
         <?php
             if(isset($_GET['name'])){
         ?>
-                load_content('Welcome','<?php echo extractPathAndQuery(getCurrentUrl());?>','nav-btn-<?php echo $_GET['name']?>');
+                load_content('Welcome',<?php echo json_encode(extractPathAndQuery(getCurrentUrl())); ?>,<?php echo json_encode('nav-btn-'.$_GET['name']); ?>);
         <?php
             }else{
         ?>

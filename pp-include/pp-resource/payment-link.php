@@ -270,7 +270,7 @@
               $.ajax({
                 type: "POST",
                 url: "/admin/dashboard",
-                data: { action: "pp_payment_links_list", page: page, search: search, payment_link_status: payment_link_status },
+                data: { action: "pp_payment_links_list", page: page, search: search, payment_link_status: payment_link_status, csrf_token: window.PP_CSRF_TOKEN || '' },
                 success: function (data) {
                     tbody.empty();
                     
@@ -391,6 +391,7 @@
                     formData.append('action', 'pp_bulk_action_payment_link');
                     formData.append('action_name', action);
                     formData.append('ids', ids);
+                    formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
                     
                     $.ajax({
                         type: "POST",

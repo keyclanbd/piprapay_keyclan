@@ -109,6 +109,11 @@
                       <i class="bi bi-alexa nav-icon"></i> Contact & Social
                     </a>
                   </li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="#footer-links">
+                      <i class="bi bi-link-45deg nav-icon"></i> Footer Links
+                    </a>
+                  </li>
                 </ul>
               </div>
               <!-- End Navbar Collapse -->
@@ -526,6 +531,68 @@
             <!-- Sticky Block End Point -->
             
             
+              <!-- Card -->
+              <div id="footer-links" class="card">
+                <div class="card-header">
+                  <h4 class="card-title">Checkout Footer Links</h4>
+                  <p class="card-text" style="margin:0;font-size:13px;color:#677788;">URLs for the Support, FAQ and Information buttons on the checkout page.</p>
+                </div>
+
+                <!-- Body -->
+                <div class="card-body">
+                    <!-- Form -->
+                    <div class="row mb-4">
+                      <div class="col-sm-4">
+                          <label for="footer_support_url" class="col-sm-3 col-form-label form-label" style=" width: 100%; ">Support URL</label>
+
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" name="footer_support_url" id="footer_support_url" placeholder="https://..." value="<?php if(isset($global_setting_response['response'][0]['footer_support_url']) && $global_setting_response['response'][0]['footer_support_url'] !== "--"){echo $global_setting_response['response'][0]['footer_support_url'];}?>">
+                            </div>
+                      </div>
+
+                      <div class="col-sm-4">
+                          <label for="footer_faq_url" class="col-sm-3 col-form-label form-label" style=" width: 100%; ">FAQ URL</label>
+
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" name="footer_faq_url" id="footer_faq_url" placeholder="https://..." value="<?php if(isset($global_setting_response['response'][0]['footer_faq_url']) && $global_setting_response['response'][0]['footer_faq_url'] !== "--"){echo $global_setting_response['response'][0]['footer_faq_url'];}?>">
+                            </div>
+                      </div>
+
+                      <div class="col-sm-4">
+                          <label for="footer_information_url" class="col-sm-3 col-form-label form-label" style=" width: 100%; ">Information URL</label>
+
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" name="footer_information_url" id="footer_information_url" placeholder="https://..." value="<?php if(isset($global_setting_response['response'][0]['footer_information_url']) && $global_setting_response['response'][0]['footer_information_url'] !== "--"){echo $global_setting_response['response'][0]['footer_information_url'];}?>">
+                            </div>
+                      </div>
+                    </div>
+                    <!-- End Form -->
+
+                    <!-- Form -->
+                    <div class="row mb-4">
+                      <div class="col-sm-12">
+                          <label for="footer_terms_url" class="col-sm-3 col-form-label form-label" style=" width: 100%; ">Terms of Service URL</label>
+
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" name="footer_terms_url" id="footer_terms_url" placeholder="https://..." value="<?php if(isset($global_setting_response['response'][0]['footer_terms_url']) && $global_setting_response['response'][0]['footer_terms_url'] !== "--"){echo $global_setting_response['response'][0]['footer_terms_url'];}?>">
+                            </div>
+                      </div>
+                    </div>
+                    <!-- End Form -->
+
+                    <span class="response-footer_links"></span>
+
+                    <div class="d-flex justify-content-end">
+                      <button type="submit" class="btn btn-primary btn-footer_links" onclick="savefooter_links()">Save Changes</button>
+                    </div>
+                  <!-- End Form -->
+                </div>
+                <!-- End Body -->
+
+            </div>
+            <!-- Sticky Block End Point -->
+
+
             <div id="stickyBlockEndPoint"></div>
           </div>
         </div>
@@ -536,6 +603,10 @@
                HSCore.components.HSTomSelect.init('.js-select');
            }
            initialize();
+
+           if (!window.PP_CSRF_TOKEN) {
+               window.PP_CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+           }
                    
            document.getElementById('default_currency').addEventListener('change', function () {
                 const selectedValue = this.value;
@@ -545,6 +616,33 @@
                 document.querySelector("#currency_rate").value = selectedOption.dataset.rate;
            });
            
+
+            function savefooter_links(){
+              var footer_support_url = document.querySelector("#footer_support_url").value;
+              var footer_faq_url = document.querySelector("#footer_faq_url").value;
+              var footer_information_url = document.querySelector("#footer_information_url").value;
+              var footer_terms_url = document.querySelector("#footer_terms_url").value;
+
+              document.querySelector(".btn-footer_links").innerHTML = '<div class="spinner-border text-light spinner-border-sm" role="status"> <span class="visually-hidden">Loading...</span> </div>';
+
+                $.ajax
+                ({
+                    type: "POST",
+                    url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
+                    data: { "action": "pp_savefooter_links", "footer_support_url": footer_support_url, "footer_faq_url": footer_faq_url, "footer_information_url": footer_information_url, "footer_terms_url": footer_terms_url, "csrf_token": (window.PP_CSRF_TOKEN || '')},
+                    success: function (data) {
+                        document.querySelector(".btn-footer_links").innerHTML = 'Save changes';
+
+                        var dedata = JSON.parse(data);
+
+                        if(dedata.status == "false"){
+                            document.querySelector(".response-footer_links").innerHTML = '<div class="alert alert-danger" style="margin-top:10px;margin-bottom:10px"> <i class="fa fa-info-circle me-2"></i> '+dedata.message+'</div>';
+                        }else{
+                            document.querySelector(".response-footer_links").innerHTML = '<div class="alert alert-primary" style="margin-top:10px;margin-bottom:10px"> <i class="fa fa-info-circle me-2"></i> '+dedata.message+'</div>';
+                        }
+                    }
+                });
+            }
 
             function savesupport_contact(){
               var support_contact_phone_mobile = document.querySelector("#support_contact_phone_mobile").value;
@@ -563,7 +661,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_savesupport_contact", "support_contact_phone_mobile": support_contact_phone_mobile, "support_contact_email_addrss": support_contact_email_addrss, "support_contact_support_website": support_contact_support_website, "support_contact_facebok_page": support_contact_facebok_page, "support_contact_messenger": support_contact_messenger, "support_contact_whatsapp": support_contact_whatsapp, "support_contact_telegram": support_contact_telegram, "support_contact_youtube": support_contact_youtube},
+                    data: { "action": "pp_savesupport_contact", "support_contact_phone_mobile": support_contact_phone_mobile, "support_contact_email_addrss": support_contact_email_addrss, "support_contact_support_website": support_contact_support_website, "support_contact_facebok_page": support_contact_facebok_page, "support_contact_messenger": support_contact_messenger, "support_contact_whatsapp": support_contact_whatsapp, "support_contact_telegram": support_contact_telegram, "support_contact_youtube": support_contact_youtube, "csrf_token": (window.PP_CSRF_TOKEN || '')},
                     success: function (data) {
                         document.querySelector(".btn-support_contact").innerHTML = 'Save changes';
                         
@@ -591,6 +689,7 @@
                     formData.append('action', 'pp_branding');
                     formData.append('branding_favicon', $('#branding_favicon')[0].files[0]);
                     formData.append('branding_logo', $('#branding_logo')[0].files[0]);
+                    formData.append('csrf_token', window.PP_CSRF_TOKEN || '');
             
                     $.ajax({
                         type: "POST",
@@ -617,12 +716,12 @@
 
 
             function load_branding_logo(){
-                $('.branding_logo-preview').html('<img src="<?php if(isset($global_setting_response['response'][0]['logo'])){if($global_setting_response['response'][0]['logo'] == "--"){echo 'https://cdn.piprapay.com/media/logo.png';}else{echo $global_setting_response['response'][0]['logo'];};}else{echo 'https://cdn.piprapay.com/media/logo.png';}?>" style=" max-width: 100%; max-height: 60px; margin-top: 10px; ">');
+                $('.branding_logo-preview').html('<img src="<?php if(isset($global_setting_response['response'][0]['logo'])){if($global_setting_response['response'][0]['logo'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $global_setting_response['response'][0]['logo'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>" style=" max-width: 100%; max-height: 60px; margin-top: 10px; ">');
             }
             load_branding_logo();
             
             function load_branding_favicon(){
-                $('.branding_favicon-preview').html('<img src="<?php if(isset($global_setting_response['response'][0]['favicon'])){if($global_setting_response['response'][0]['favicon'] == "--"){echo 'https://cdn.piprapay.com/media/favicon.png';}else{echo $global_setting_response['response'][0]['favicon'];};}else{echo 'https://cdn.piprapay.com/media/favicon.png';}?>" style="margin-top: 10px;max-width: 100px;max-height: 100px;">');
+                $('.branding_favicon-preview').html('<img src="<?php if(isset($global_setting_response['response'][0]['favicon'])){if($global_setting_response['response'][0]['favicon'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $global_setting_response['response'][0]['favicon'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>" style="margin-top: 10px;max-width: 100px;max-height: 100px;">');
             }
             load_branding_favicon();
 
@@ -664,7 +763,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_savebusiness_details", "business_details_street_address": business_details_street_address, "business_details_city_town": business_details_city_town, "business_details_postal_code": business_details_postal_code, "business_details_country": business_details_country},
+                    data: { "action": "pp_savebusiness_details", "business_details_street_address": business_details_street_address, "business_details_city_town": business_details_city_town, "business_details_postal_code": business_details_postal_code, "business_details_country": business_details_country, "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-business_details").innerHTML = 'Save changes';
                         
@@ -686,7 +785,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_resetcolorscheme"},
+                    data: { "action": "pp_resetcolorscheme", "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-pp_resetcolorscheme").innerHTML = 'Reset';
                         
@@ -718,7 +817,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_savecolorscheme", "global_text_color": global_text_color, "primary_button_color": primary_button_color, "button_text_color": button_text_color, "button_hover_color": button_hover_color, "button_hover_text_color": button_hover_text_color, "navigation_background": navigation_background, "navigation_text_color": navigation_text_color, "active_tab_color": active_tab_color, "active_tab_text_color": active_tab_text_color},
+                    data: { "action": "pp_savecolorscheme", "global_text_color": global_text_color, "primary_button_color": primary_button_color, "button_text_color": button_text_color, "button_hover_color": button_hover_color, "button_hover_text_color": button_hover_text_color, "navigation_background": navigation_background, "navigation_text_color": navigation_text_color, "active_tab_color": active_tab_color, "active_tab_text_color": active_tab_text_color, "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-pp_savecolorscheme").innerHTML = 'Save changes';
                         
@@ -746,7 +845,7 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_systembasicinfo", "sitename": sitename , "default_timezone": default_timezone, "default_currency": default_currency , "currency_symbol": currency_symbol, "currency_rate": currency_rate },
+                    data: { "action": "pp_systembasicinfo", "sitename": sitename , "default_timezone": default_timezone, "default_currency": default_currency , "currency_symbol": currency_symbol, "currency_rate": currency_rate, "csrf_token": window.PP_CSRF_TOKEN || '' },
                     success: function (data) {
                         document.querySelector(".btn-savebasicinfo").innerHTML = 'Save changes';
                         

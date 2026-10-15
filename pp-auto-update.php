@@ -9,13 +9,13 @@
             exit();
         }else{
             if (file_exists(__DIR__.'/pp-include/pp-controller.php')) {
-                include(__DIR__."/pp-include/pp-controller.php");
+                include_once(__DIR__."/pp-include/pp-controller.php");
             }else{
                 echo 'System is under maintenance. Please try again later.';
                 exit();
             }
             if (file_exists(__DIR__.'/pp-include/pp-model.php')) {
-                include(__DIR__."/pp-include/pp-model.php");
+                include_once(__DIR__."/pp-include/pp-model.php");
             }else{
                 echo 'System is under maintenance. Please try again later.';
                 exit();
@@ -78,34 +78,51 @@
             exit();
         }
     
-        file_put_contents($update_zip, file_get_contents($remote_data['releases'][0]['download_url']));
+file_put_contents($update_zip, file_get_contents($remote_data['releases'][0]['download_url']));
         if (!file_exists($update_zip)) {
             unlink($maintenance_file);
             echo json_encode(["status" => "false", "message" => "Download failed"]);
             exit();
         }
-    
+
+        $expectedChecksum = $remote_data['releases'][0]['checksum_sha256'] ?? null;
+        if ($expectedChecksum !== null) {
+            $actualChecksum = hash_file('sha256', $update_zip);
+            if (hash_equals($expectedChecksum, $actualChecksum) === false) {
+                unlink($maintenance_file);
+                @unlink($update_zip);
+                echo json_encode(["status" => "false", "message" => "Integrity check failed: checksum mismatch"]);
+                exit();
+            }
+        }
+
         $zip = new ZipArchive;
         $tempPath = __DIR__ . '/temp_update_' . time();
         mkdir($tempPath);
-    
+
         if ($zip->open($update_zip) === TRUE) {
             $zip->extractTo($tempPath);
             $zip->close();
             unlink($update_zip);
-    
-            // Detect the first folder inside the extracted ZIP (e.g. update-1.0.1)
+
+            $projectRoot = realpath(__DIR__);
+
             $subdirs = array_filter(glob($tempPath . '/*'), 'is_dir');
             $realSource = count($subdirs) === 1 ? $subdirs[0] : $tempPath;
-    
-            // Move files to root
+
             $dirIterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($realSource, RecursiveDirectoryIterator::SKIP_DOTS),
                 RecursiveIteratorIterator::SELF_FIRST
             );
-    
+
             foreach ($dirIterator as $item) {
-                $destPath = __DIR__ . '/' . $dirIterator->getSubPathName();
+                $relativePath = $dirIterator->getSubPathName();
+                $destPath = realpath(__DIR__) . '/' . $relativePath;
+
+                if (strpos($destPath, $projectRoot) !== 0) {
+                    continue;
+                }
+
                 if ($item->isDir()) {
                     @mkdir($destPath, 0755, true);
                 } else {
@@ -184,7 +201,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PipraPay - Auto Update</title>
-    <link rel="icon" type="image/x-icon" href="https://cdn.piprapay.com/media/favicon.png">
+    <link rel="icon" type="image/x-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=">
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->

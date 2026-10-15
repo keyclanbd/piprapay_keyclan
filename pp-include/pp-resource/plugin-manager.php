@@ -388,7 +388,7 @@
             ({
                 type: "POST",
                 url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/plugin-manager",
-                data: { "action": "pp_plugin_manager", "type": type, "mainfolder": mainfolder, "pluginfolder": pluginfolder},
+                data: { "action": "pp_plugin_manager", "type": type, "mainfolder": mainfolder, "pluginfolder": pluginfolder, "csrf_token": window.PP_CSRF_TOKEN || ''},
                 success: function (data) {
                     console.log(data);
                     $("."+btn).prop("disabled", false);
