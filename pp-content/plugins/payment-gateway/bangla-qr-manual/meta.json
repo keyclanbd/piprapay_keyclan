@@ -1,0 +1,6 @@
+{
+  "type": "plugins",
+  "slug": "bangla-qr-manual",
+  "name": "Bangla QR Manual",
+  "mrdr": "payment-gateway"
+}
