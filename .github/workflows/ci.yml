@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -38,12 +38,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Fail if secrets or local state are committed
         run: |
-          blocked='(^|/)pp-config\.php$|(^|/)\.env$|(^|/)install\.lock$|(^|/)maintenance\.lock$|(^|/).*\.sql$|(^|/)cache/.*\.json$'
+          blocked='(^|/)pp-config\.php$|(^|/)\.env$|(^|/)install\.lock$|(^|/)maintenance\.lock$|(^|/)cache/.*\.json$'
           offenders=$(git ls-files | grep -E "$blocked" || true)
+          # SQL dumps are blocked everywhere except the installer templates in install/
+          sql_offenders=$(git ls-files '*.sql' | grep -v '^install/' || true)
+          offenders=$(printf '%s\n%s' "$offenders" "$sql_offenders" | grep -v '^$' || true)
           if [ -n "$offenders" ]; then
             echo "::error::Blocked files are committed:"
             echo "$offenders"
