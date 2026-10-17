@@ -315,12 +315,12 @@
 
         @media (max-width: 640px) {
             body { padding: 0; }
-            .gateway { min-height: 100vh; border: 0; border-radius: 0; }
-            .top { margin-bottom: 16px; }
-            .amount { padding: 24px; }
-            .price { font-size: 32px; }
+            .gateway { min-height: 100vh; border: 0; border-radius: 0; padding: 0 14px 20px; }
+            .top { margin-bottom: 12px; }
+            .amount { padding: 18px 20px; }
+            .price { font-size: 28px; letter-spacing: -.5px; }
             .bank-logo-image { height: 45px; max-width: 150px; }
-            .content { width: 100%; padding-top: 0; }
+            .content { width: 100%; padding-top: 0; min-width: 0; } .main { padding: 16px; }
             .account-row { align-items: flex-start; flex-direction: column; gap: 6px; padding: 13px 15px; }
             .account-value { width: 100%; justify-content: space-between; text-align: left; }
         }
