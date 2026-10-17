@@ -84,7 +84,8 @@
   </script>
 
   <title>Dashboard - PipraPay</title>
-  <link rel="icon" type="image/x-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=">
+  <?php $pp_admin_favicon = $global_setting_response['response'][0]['favicon'] ?? '--'; ?>
+  <link rel="icon" type="image/x-icon" href="<?php echo ($pp_admin_favicon !== '--' && $pp_admin_favicon !== '') ? htmlspecialchars($pp_admin_favicon, ENT_QUOTES) : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII='; ?>">
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;display=swap" rel="stylesheet">
 
@@ -217,11 +218,12 @@
   <header id="header" class="navbar navbar-expand-lg navbar-fixed navbar-height navbar-container navbar-bordered bg-white">
     <div class="navbar-nav-wrap">
       <!-- Logo -->
+      <?php $pp_admin_logo = $global_setting_response['response'][0]['logo'] ?? '--'; $pp_admin_logo_src = ($pp_admin_logo !== '--' && $pp_admin_logo !== '') ? $pp_admin_logo : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII='; ?>
       <a class="navbar-brand" href="javascript:void(0)" aria-label="Front">
-        <img class="navbar-brand-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="default">
-        <img class="navbar-brand-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="dark">
-        <img class="navbar-brand-logo-mini" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="default">
-        <img class="navbar-brand-logo-mini" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="dark">
+        <img class="navbar-brand-logo" src="<?php echo htmlspecialchars($pp_admin_logo_src, ENT_QUOTES); ?>" alt="Logo" data-hs-theme-appearance="default">
+        <img class="navbar-brand-logo" src="<?php echo htmlspecialchars($pp_admin_logo_src, ENT_QUOTES); ?>" alt="Logo" data-hs-theme-appearance="dark">
+        <img class="navbar-brand-logo-mini" src="<?php echo htmlspecialchars($pp_admin_logo_src, ENT_QUOTES); ?>" alt="Logo" data-hs-theme-appearance="default">
+        <img class="navbar-brand-logo-mini" src="<?php echo htmlspecialchars($pp_admin_logo_src, ENT_QUOTES); ?>" alt="Logo" data-hs-theme-appearance="dark">
       </a>
       <!-- End Logo -->
 
@@ -281,10 +283,10 @@
         <!-- Logo -->
 
         <a class="navbar-brand" href="javascript:void(0)" aria-label="Front">
-          <img class="navbar-brand-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="default">
-          <img class="navbar-brand-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="dark">
-          <img class="navbar-brand-logo-mini" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="default">
-          <img class="navbar-brand-logo-mini" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Logo" data-hs-theme-appearance="dark">
+          <img class="navbar-brand-logo" src="<?php echo htmlspecialchars($pp_admin_logo_src, ENT_QUOTES); ?>" alt="Logo" data-hs-theme-appearance="default">
+          <img class="navbar-brand-logo" src="<?php echo htmlspecialchars($pp_admin_logo_src, ENT_QUOTES); ?>" alt="Logo" data-hs-theme-appearance="dark">
+          <img class="navbar-brand-logo-mini" src="<?php echo htmlspecialchars($pp_admin_logo_src, ENT_QUOTES); ?>" alt="Logo" data-hs-theme-appearance="default">
+          <img class="navbar-brand-logo-mini" src="<?php echo htmlspecialchars($pp_admin_logo_src, ENT_QUOTES); ?>" alt="Logo" data-hs-theme-appearance="dark">
         </a>
 
         <!-- End Logo -->
