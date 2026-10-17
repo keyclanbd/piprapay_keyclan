@@ -766,9 +766,10 @@
             .left-panel > .line-row,
             .left-panel > .divider,
             .left-panel > .total-row { display: none; }
-            .category-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-            .category-card { min-height: 76px; font-size: 12px; padding: 10px 4px; }
-            .category-card i { font-size: 22px; }
+            .category-row { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; }
+            .category-card { min-height: 66px; font-size: 11px; padding: 8px 3px; gap: 6px; }
+            .category-card span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .category-card i { font-size: 20px; }
             .methods-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
             .method-card { min-height: 82px; height: 100%; padding: 6px 5px; gap: 3px; }
             .footer-row {
@@ -803,7 +804,10 @@
         }
 
         @media (max-width: 400px) {
-            .category-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .category-row { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 5px; }
+            .category-card { min-height: 60px; font-size: 10px; padding: 6px 2px; gap: 4px; }
+            .category-card span { font-size: 10px; }
+            .category-card i { font-size: 18px; }
             .methods-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .right-head { flex-direction: column; gap: 4px; }
             .timer-pill { align-self: flex-start; }
