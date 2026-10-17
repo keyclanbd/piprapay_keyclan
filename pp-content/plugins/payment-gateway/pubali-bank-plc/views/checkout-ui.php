@@ -315,7 +315,7 @@
 
         @media (max-width: 640px) {
             body { padding: 0; }
-            .gateway { min-height: 100vh; border: 0; border-radius: 0; padding: 0 14px 20px; }
+            .gateway { width: calc(100% - 16px); margin: 10px auto 24px; min-height: auto; border: 0; border-radius: 24px; padding: 0 14px 18px; }
             .top { margin-bottom: 12px; }
             .amount { padding: 18px 20px; }
             .price { font-size: 28px; letter-spacing: -.5px; }
