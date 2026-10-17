@@ -44,6 +44,11 @@ ErrorDocument 403 /error.php
     </FilesMatch>
 </IfModule>
 
+# Never serve the git metadata, CI config, or IDE files if they land on the server.
+RedirectMatch 404 /\.git
+RedirectMatch 404 /\.github
+RedirectMatch 404 /\.vscode
+
 <FilesMatch "^(pp-config\.php|install\.lock|.*\.sql|.*\.log|.*\.bak|.*\.env)$">
     Require all denied
 </FilesMatch>
