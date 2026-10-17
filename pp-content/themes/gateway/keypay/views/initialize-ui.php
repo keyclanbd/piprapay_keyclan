@@ -716,7 +716,17 @@
         @media (max-width: 980px) {
             .checkout-shell { align-items: stretch; padding: 16px; }
             .checkout-grid { grid-template-columns: 1fr; min-height: auto; }
-            .left-panel { border-right: 0; border-bottom: 1px solid var(--border); }
+            .left-panel {
+                border-right: 0;
+                border-bottom: 1px solid var(--border);
+                padding-bottom: 14px;
+            }
+            .right-panel { padding-top: 14px; }
+            .right-head { margin-bottom: 4px; }
+            .amount-card { margin: 4px 0 10px; }
+            .section { margin-top: 14px; }
+            .offers-empty { padding: 18px 16px 4px; }
+            .bottom-links { padding-top: 14px; }
         }
 
         @media (max-width: 640px) {
