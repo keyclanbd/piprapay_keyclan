@@ -149,6 +149,10 @@
             background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
         }
 
+        .top-actions {
+            display: none;
+        }
+
         .top-row {
             display: flex;
             align-items: flex-start;
@@ -767,13 +771,18 @@
             }
             .top-row { align-items: center; }
             .offer-trigger { display: inline-flex; }
-            .mobile-timer {
+            .top-actions {
                 display: inline-flex;
                 align-items: center;
-                align-self: center;
-                margin: 0 0 0 8px;
+                gap: 8px;
+                margin-left: auto;
+                flex-shrink: 0;
             }
-            .merchant-head .mobile-timer { margin-top: 0; }
+            .top-actions .mobile-timer {
+                display: inline-flex;
+                align-items: center;
+                margin: 0;
+            }
             .right-head .panel-timer { display: none; }
             .left-panel > .section { display: none; }
             .amount-toggle { display: block; }
@@ -848,17 +857,19 @@
                                 <div class="merchant-head">
                                     <img src="<?php echo htmlspecialchars($merchantLogo); ?>" alt="<?php echo htmlspecialchars($merchantName); ?>" class="merchant-logo">
                                     <p class="merchant-name">KeyClan</p>
-                                    <div class="timer-pill panel-timer mobile-timer" id="mobile-checkout-timer">
-                                        <i class="far fa-clock"></i>
-                                        <span>10:00</span>
-                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <button class="offer-trigger" type="button" aria-controls="offer-drawer" aria-expanded="false">
-                        <i class="far fa-percent"></i> Offers
-                    </button>
+                    <div class="top-actions">
+                        <div class="timer-pill panel-timer mobile-timer" id="mobile-checkout-timer">
+                            <i class="far fa-clock"></i>
+                            <span>10:00</span>
+                        </div>
+                        <button class="offer-trigger" type="button" aria-controls="offer-drawer" aria-expanded="false">
+                            <i class="far fa-percent"></i> Offers
+                        </button>
+                    </div>
                 </div>
 
                 <div class="amount-card">
