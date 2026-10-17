@@ -733,13 +733,19 @@
                 width: 100%;
                 height: max-content;
                 min-height: 0;
+                padding-bottom: 12px;
             }
             .right-panel {
                 align-self: stretch;
                 width: 100%;
                 min-height: 0;
+                padding-top: 12px;
             }
-            .left-panel, .right-panel { padding: 20px 18px; }
+            .left-panel, .right-panel { padding: 16px 16px; }
+            .left-panel { padding-bottom: 10px; }
+            .right-panel { padding-top: 10px; }
+            .right-head { display: none; }
+            .amount-card { margin: 4px 0 8px; }
             .left-panel > .bottom-links { display: none; }
             .footer-row .bottom-links {
                 display: flex;
@@ -801,6 +807,10 @@
             .welcome { font-size: 22px; }
             .amount-value { font-size: 28px; }
             .timer-pill { align-self: flex-end; }
+            .offers-empty { padding: 18px 12px 4px; }
+            .offers-empty i { font-size: 24px; margin-bottom: 6px; }
+            .section { margin-top: 12px; }
+            .bottom-links { padding-top: 12px; margin-top: 12px; }
         }
 
         @media (max-width: 400px) {
