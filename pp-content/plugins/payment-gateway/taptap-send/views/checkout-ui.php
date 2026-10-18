@@ -11,8 +11,8 @@
     $formatted_amount = number_format($transaction_amount, 2);
     $site_name = $setting['response'][0]['site_name'] ?? 'KeyClan';
     $payment_link = pp_get_paymentlink($payment_id);
-    $payment_number = $settings['payment_number'] ?? '';
-    $recipient_method = $settings['recipient_method'] ?? 'bKash Personal';
+    $account_name = $settings['account_name'] ?? '';
+    $account_number = $settings['account_number'] ?? '';
     $currency_symbols = ['BDT' => '৳', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'INR' => '₹', 'PKR' => '₨', 'AED' => 'د.إ', 'SAR' => '﷼', 'CAD' => 'C$', 'AUD' => 'A$', 'JPY' => '¥', 'CNY' => '¥'];
     $currency_symbol = $currency_symbols[strtoupper($settings['currency'] ?? '')] ?? ($settings['currency'] ?? '');
     $amount = number_format($transaction_amount, 2).' '.$currency_symbol;
@@ -366,12 +366,12 @@
                     <span class="account-value"><span><?php echo htmlspecialchars($amount, ENT_QUOTES, 'UTF-8'); ?></span><button type="button" class="copy-button" onclick="copyText(<?php echo htmlspecialchars(json_encode($formatted_amount), ENT_QUOTES, 'UTF-8'); ?>, this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button></span>
                 </div>
                 <div class="account-row">
-                    <span class="account-label">Recipient method</span>
-                    <span class="account-value"><span><?php echo htmlspecialchars($recipient_method, ENT_QUOTES, 'UTF-8'); ?></span><button type="button" class="copy-button" onclick="copyText(<?php echo htmlspecialchars(json_encode($recipient_method), ENT_QUOTES, 'UTF-8'); ?>, this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button></span>
+                    <span class="account-label">Account name</span>
+                    <span class="account-value"><span><?php echo htmlspecialchars($account_name, ENT_QUOTES, 'UTF-8'); ?></span><button type="button" class="copy-button" onclick="copyText(<?php echo htmlspecialchars(json_encode($account_name), ENT_QUOTES, 'UTF-8'); ?>, this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button></span>
                 </div>
                 <div class="account-row">
-                    <span class="account-label">Number</span>
-                    <span class="account-value"><span><?php echo htmlspecialchars($payment_number, ENT_QUOTES, 'UTF-8'); ?></span><button type="button" class="copy-button" onclick="copyText(<?php echo htmlspecialchars(json_encode($payment_number), ENT_QUOTES, 'UTF-8'); ?>, this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button></span>
+                    <span class="account-label">Account number</span>
+                    <span class="account-value"><span><?php echo htmlspecialchars($account_number, ENT_QUOTES, 'UTF-8'); ?></span><button type="button" class="copy-button" onclick="copyText(<?php echo htmlspecialchars(json_encode($account_number), ENT_QUOTES, 'UTF-8'); ?>, this)"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg></button></span>
                 </div>
             </div>
 

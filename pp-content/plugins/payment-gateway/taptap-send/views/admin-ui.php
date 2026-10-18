@@ -125,21 +125,17 @@
             <div class="card-body">
                 <div class="row mb-4">
                   <div class="col-sm-6">
-                    <label for="payment_number" class="col-sm-12 col-form-label form-label">Number</label>
+                    <label for="account_name" class="col-sm-12 col-form-label form-label">Account Name</label>
                     <div class="input-group">
-                        <input type="text" class="form-control" name="payment_number" id="payment_number" value="<?= htmlspecialchars($settings['payment_number'] ?? '') ?>">
+                        <input type="text" class="form-control" name="account_name" id="account_name" value="<?= htmlspecialchars($settings['account_name'] ?? '') ?>">
                     </div>
                     <div class="text-secondary mt-2"> </div>
                   </div>
 
                   <div class="col-sm-6">
-                    <label for="recipient_method" class="col-sm-12 col-form-label form-label">Recipient Method</label>
+                    <label for="account_number" class="col-sm-12 col-form-label form-label">Account Number</label>
                     <div class="input-group">
-                      <select class="form-control" name="recipient_method" id="recipient_method">
-                        <?php $recipient_method = isset($settings['recipient_method']) ? strtolower($settings['recipient_method']) : ''; ?>
-                        <option value="Bkash Personal" <?php echo ($recipient_method === 'Bkash Personal') ? 'selected' : ''; ?>>Bkash Personal</option>
-                        <option value="Nagad Personal" <?php echo ($recipient_method === 'Nagad Personal') ? 'selected' : ''; ?>>Nagad Personal</option>
-                      </select>
+                        <input type="text" class="form-control" name="account_number" id="account_number" value="<?= htmlspecialchars($settings['account_number'] ?? '') ?>">
                     </div>
                     <div class="text-secondary mt-2"> </div>
                   </div>
