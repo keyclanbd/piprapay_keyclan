@@ -58,14 +58,19 @@
             
             if($transaction_details['status'] == true){
                 $createdAt = $transaction_details['response'][0]['created_at'] ?? '--';
-                if ($createdAt !== '--') {
-                    $createdTime = strtotime($createdAt);
-                    $timeout = defined('PP_PAYMENT_SESSION_TIMEOUT') ? PP_PAYMENT_SESSION_TIMEOUT : 600;
-                    if (time() - $createdTime > $timeout) {
-                        pp_set_transaction_status($payment_id, 'failed');
-                        header('Location: https://' . $_SERVER['HTTP_HOST']);
-                        exit();
-                    }
+                $timeout = defined('PP_PAYMENT_SESSION_TIMEOUT') ? (int) PP_PAYMENT_SESSION_TIMEOUT : 600;
+                $createdTime = ($createdAt !== '--') ? strtotime($createdAt) : false;
+
+                if ($createdTime !== false && (time() - $createdTime) > $timeout) {
+                    // Session window has closed. Mark it failed so a refresh can
+                    // never hand the customer a fresh countdown.
+                    pp_set_transaction_status($payment_id, 'failed');
+                    $cancelRedirect = $transaction_details['response'][0]['transaction_cancel_url'] ?? '';
+                    $expiredTarget = ($cancelRedirect !== '' && $cancelRedirect !== '--')
+                        ? $cancelRedirect
+                        : 'https://' . $_SERVER['HTTP_HOST'];
+                    header('Location: ' . $expiredTarget);
+                    exit();
                 }
                 theme_include('gateway', $setting['response'][0]['gateway_theme'], $setting['response'][0]['gateway_theme'].'-class.php', $payment_id, 'payment_id');
                         

@@ -38,6 +38,13 @@
     $clientName = $transaction_details['response'][0]['c_name'] ?? '';
     $clientEmail = $transaction_details['response'][0]['c_email_mobile'] ?? '';
     $accent = '#6C63FF';
+
+    // Derive the countdown from the transaction's real age so a page refresh
+    // cannot reset the clock. Mirrors the server-side gate in payment/index.php.
+    $sessionTimeout = defined('PP_PAYMENT_SESSION_TIMEOUT') ? (int) PP_PAYMENT_SESSION_TIMEOUT : 600;
+    $createdAtRaw = $transaction_details['response'][0]['created_at'] ?? '--';
+    $elapsed = ($createdAtRaw !== '--' && strtotime($createdAtRaw) !== false) ? (time() - strtotime($createdAtRaw)) : 0;
+    $remainingSeconds = max(0, $sessionTimeout - $elapsed);
 ?>
 
 <!DOCTYPE html>
@@ -1055,7 +1062,7 @@
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Escape') closeOffers();
             });
-            let remaining = 10 * 60;
+            let remaining = <?php echo (int) $remainingSeconds; ?>;
             const cancelUrl = <?php echo json_encode($cancelUrl); ?>;
             const mainSiteUrl = 'https://' + window.location.host;
 
@@ -1080,7 +1087,10 @@
             };
 
             renderTimer();
-            if (timerEl) {
+            if (remaining <= 0) {
+                const expiredUrl = cancelUrl && cancelUrl !== '--' ? cancelUrl : mainSiteUrl;
+                window.location.href = expiredUrl;
+            } else if (timerEl || mobileTimerEl) {
                 const timerInterval = setInterval(() => {
                     if (remaining > 0) {
                         remaining -= 1;
