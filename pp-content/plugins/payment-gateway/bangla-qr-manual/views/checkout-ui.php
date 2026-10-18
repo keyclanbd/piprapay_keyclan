@@ -35,7 +35,7 @@
     $amount = number_format($transaction_amount, 2).' '.$currency_symbol;
     $logo = pp_get_site_url().'/pp-content/plugins/'.$plugin_info['plugin_dir'].'/'.$plugin_slug.'/assets/icon.png';
     $has_qr = !empty($settings['qr_code']);
-    $qr_src = $has_qr ? $settings['qr_code'] : 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&data='.urlencode('BanglaQR '.$payment_number.' '.$amount);
+    $qr_src = $has_qr ? $settings['qr_code'] : pp_qr_image_url('BanglaQR '.$payment_number.' '.$amount);
 ?>
 <!DOCTYPE html>
 <html lang="en">

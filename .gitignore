@@ -17,3 +17,6 @@ cache/*.json
 pp-content/uploads/
 pp-external/media/
 pp-content/uploads/gateway-assets/
+
+# Server-generated QR images (runtime cache, never committed)
+pp-external/media/qr-cache/
