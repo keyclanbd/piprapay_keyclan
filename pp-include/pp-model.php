@@ -2647,6 +2647,10 @@ $i_id = bin2hex(random_bytes(12));
                     
                     if (insertData($db_prefix.'transaction', $columns, $values)) {
                         echo json_encode(['status' => true, 'pp_id' => $pp_id, 'pp_url' => 'https://' . $_SERVER['HTTP_HOST'] . '/payment/' . $pp_id]);
+                        if (function_exists('pp_trigger_hook')) {
+                            // New transaction created, customer has not paid yet.
+                            pp_trigger_hook('pp_transaction_created', $pp_id);
+                        }
                     } else {
                         echo json_encode(['status' => false, 'message' => 'Unable to initialize payment. Please try again.']);
                     }

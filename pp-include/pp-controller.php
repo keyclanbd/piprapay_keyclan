@@ -1583,8 +1583,13 @@ function deleteData($tableName, $condition) {
                 $condition = "pp_id = '".$id."'"; 
                 updateData($db_prefix.'transaction', $columns, $values, $condition);
                  
-                if ($status !== 'pending' && function_exists('pp_trigger_hook')) {
-                    pp_trigger_hook('pp_transaction_ipn', $id);
+                if (function_exists('pp_trigger_hook')) {
+                    if ($status === 'pending') {
+                        // Customer submitted the receipt, waiting for verification.
+                        pp_trigger_hook('pp_transaction_pending', $id);
+                    } else {
+                        pp_trigger_hook('pp_transaction_ipn', $id);
+                    }
                 }
             }
 
@@ -1674,8 +1679,13 @@ function deleteData($tableName, $condition) {
             return false;
         }
         $conn->close();
-        if ($status !== 'pending' && function_exists('pp_trigger_hook')) {
-            pp_trigger_hook('pp_transaction_ipn', $id);
+        if (function_exists('pp_trigger_hook')) {
+            if ($status === 'pending') {
+                // Customer submitted the payment reference, waiting for verification.
+                pp_trigger_hook('pp_transaction_pending', $id);
+            } else {
+                pp_trigger_hook('pp_transaction_ipn', $id);
+            }
         }
         return true;
     }
