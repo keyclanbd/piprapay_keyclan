@@ -16,7 +16,7 @@
         if(pp_set_transaction_byslip($payment_id, $plugin_slug, $plugin_info['plugin_name'], $_FILES['payment_slip'] ?? null, 'pending')){
             echo json_encode(["status" => "true", "message" => "Initialize Payment Slip"]);
         }else{
-           echo json_encode(["status" => "true", "message" => "Failed to upload payment slip"]);  
+           echo json_encode(["status" => "false", "message" => "Failed to upload payment slip"]);  
         }
         exit();
     }

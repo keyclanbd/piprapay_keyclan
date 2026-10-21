@@ -16,7 +16,7 @@
     $branch_name = $settings['branch_name'] ?? '';
     $routing_number = $settings['routing_number'] ?? '';
 
-    if (isset($_POST['al-arafah-bank-plc'])) {
+    if (isset($_POST['city-bank-plc'])) {
         if (pp_set_transaction_byslip($payment_id, $plugin_slug, $plugin_info['plugin_name'], $_FILES['payment_slip'] ?? null, 'pending')) {
             echo json_encode(["status" => "true", "message" => "Initialize Payment Slip"]);
         } else {
@@ -468,12 +468,12 @@
             verifyButton.querySelector('span').textContent = 'Verifying receipt…';
 
             const formData = new FormData();
-            formData.append('al-arafah-bank-plc', '<?php echo $payment_id; ?>');
+            formData.append('city-bank-plc', '<?php echo $payment_id; ?>');
             formData.append('payment_slip', file);
 
             $.ajax({
                 type: 'POST',
-                url: '<?php echo $payment_link; ?>?method=al-arafah-bank-plc',
+                url: '<?php echo $payment_link; ?>?method=city-bank-plc',
                 data: formData,
                 contentType: false,
                 processData: false,

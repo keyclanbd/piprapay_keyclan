@@ -13,7 +13,7 @@
     $transaction_amount = $transaction_amount+$transaction_fee;
     
     if(isset($_POST['tap-personal'])){
-        if($_POST['trxid'] == ""){
+        if(!preg_match('/^[A-Za-z0-9_-]{1,100}$/', (string) ($_POST['trxid'] ?? ''))){
             echo json_encode(["status" => "false", "message" => "Invalid Transaction ID", "numberbox" => "false"]);
         }else{
             $check_transactionid = pp_check_transaction_exits($_POST['trxid']);
@@ -23,7 +23,7 @@
                 if($verify_status['status'] == true){
                     if(pp_set_transaction_byid($payment_id, $plugin_slug, $plugin_info['plugin_name'], $verify_status['response'][0]['mobile_number'], $verify_status['response'][0]['transaction_id'], 'completed', $verify_status['response'][0]['id'])){
                         echo json_encode(["status" => "true", "message" => "Initialize Transaction ID"]);
-                    }
+                    }else{ echo json_encode(["status" => "false", "message" => "Unable to submit payment. Please try again.", "numberbox" => "false"]); }
                 }else{
                     if($settings['pending_payment'] == "enable"){
                         $isnumber_show = true;
@@ -41,7 +41,7 @@
                         if($isnumber_show == false){
                             if(pp_set_transaction_byid($payment_id, $plugin_slug, $plugin_info['plugin_name'], $number, $_POST['trxid'], 'pending')){
                                 echo json_encode(["status" => "true", "message" => "Initialize Transaction ID"]);
-                            }
+                            }else{ echo json_encode(["status" => "false", "message" => "Unable to submit payment. Please try again.", "numberbox" => "false"]); }
                         }else{
                            echo json_encode(["status" => "false", "message" => "Enter mobile number", "numberbox" => "true"]); 
                         }

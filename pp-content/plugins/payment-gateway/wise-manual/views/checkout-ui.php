@@ -13,7 +13,7 @@
     $transaction_amount = $transaction_amount+$transaction_fee;
     
     if(isset($_POST['wise-manual'])){
-        if($_POST['trxid'] == ""){
+        if(!preg_match('/^[A-Za-z0-9_-]{1,100}$/', (string) ($_POST['trxid'] ?? ''))){
             echo json_encode(["status" => "false", "message" => "Invalid Transaction ID"]);
         }else{
             if($_POST['email_address'] == ""){
@@ -23,7 +23,7 @@
                 if($check_transactionid['status'] == false){
                     if(pp_set_transaction_byid($payment_id, $plugin_slug, $plugin_info['plugin_name'], $_POST['email_address'], $_POST['trxid'], 'pending')){
                         echo json_encode(["status" => "true", "message" => "Initialize Transaction ID"]);
-                    }
+                    }else{ echo json_encode(["status" => "false", "message" => "Unable to submit payment. Please try again.", "numberbox" => "false"]); }
                 }else{
                    echo json_encode(["status" => "false", "message" => "Transaction ID already exits"]); 
                 }
