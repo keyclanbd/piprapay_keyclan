@@ -933,7 +933,50 @@ function deleteData($tableName, $condition) {
             }
         }
     }
-    
+
+    // Payment receipt upload: images go through uploadImage, PDFs are stored as is.
+    function uploadReceipt($file, $max_file_size) {
+        $file_extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+        if ($file_extension !== 'pdf') {
+            return uploadImage($file, $max_file_size);
+        }
+
+        $upload_directory = __DIR__ . '/../pp-external/media/';
+
+        if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) {
+            return json_encode(['status' => false, 'message' => 'No file uploaded or upload failed.']);
+        }
+
+        if ($file['size'] > $max_file_size || $file['size'] <= 0 || !is_uploaded_file($file['tmp_name'])) {
+            return json_encode(['status' => false, 'message' => 'Invalid uploaded file.']);
+        }
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $detected_mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+
+        $handle = @fopen($file['tmp_name'], 'rb');
+        $header = $handle ? fread($handle, 5) : '';
+        if ($handle) {
+            fclose($handle);
+        }
+
+        if ($detected_mime !== 'application/pdf' || $header !== '%PDF-') {
+            return json_encode(['status' => false, 'message' => 'Invalid file type. Only JPG, PNG, GIF, WEBP images and PDF files are allowed.']);
+        }
+
+        if (!is_dir($upload_directory) && !mkdir($upload_directory, 0755, true)) {
+            return json_encode(['status' => false, 'message' => 'Upload directory is unavailable.']);
+        }
+
+        $random_filename = generateRandomFilename('pdf');
+        if (!move_uploaded_file($file['tmp_name'], $upload_directory . $random_filename)) {
+            return json_encode(['status' => false, 'message' => 'File upload failed.']);
+        }
+
+        return json_encode(['status' => true, 'file' => $random_filename]);
+    }
+
     function deleteImage($file) {
         // Define the local image directory path
         $upload_directory = __DIR__ . '/../pp-external/media/'; // Update path if different
@@ -1573,23 +1616,26 @@ function deleteData($tableName, $condition) {
 
             $max_file_size = 10 * 1024 * 1024; 
             
-            $transaction_slip = json_decode(uploadImage($payment_slip_file, $max_file_size), true);
-            if($transaction_slip['status'] == true){
-                $transaction_slip = 'https://'.$_SERVER['HTTP_HOST'].'/pp-external/media/'.$transaction_slip['file'];
-             
-                $columns = ['payment_method_id', 'payment_method', 'payment_verify_way', 'payment_verify_id', 'transaction_status', 'transaction_amount', 'transaction_fee', 'transaction_currency'];
-                $values = [$payment_method_id, $payment_method, 'slip', $transaction_slip, $status, $transaction_amount, $transaction_fee, $transaction_currency];
-        
-                $condition = "pp_id = '".$id."'"; 
-                updateData($db_prefix.'transaction', $columns, $values, $condition);
-                 
-                if (function_exists('pp_trigger_hook')) {
-                    if ($status === 'pending') {
-                        // Customer submitted the receipt, waiting for verification.
-                        pp_trigger_hook('pp_transaction_pending', $id);
-                    } else {
-                        pp_trigger_hook('pp_transaction_ipn', $id);
-                    }
+            $transaction_slip = json_decode(uploadReceipt($payment_slip_file, $max_file_size), true);
+            // A failed upload must not be reported as a submitted receipt.
+            if (($transaction_slip['status'] ?? false) !== true) {
+                return false;
+            }
+
+            $transaction_slip = 'https://'.$_SERVER['HTTP_HOST'].'/pp-external/media/'.$transaction_slip['file'];
+
+            $columns = ['payment_method_id', 'payment_method', 'payment_verify_way', 'payment_verify_id', 'transaction_status', 'transaction_amount', 'transaction_fee', 'transaction_currency'];
+            $values = [$payment_method_id, $payment_method, 'slip', $transaction_slip, $status, $transaction_amount, $transaction_fee, $transaction_currency];
+
+            $condition = "pp_id = '".$id."'";
+            updateData($db_prefix.'transaction', $columns, $values, $condition);
+
+            if (function_exists('pp_trigger_hook')) {
+                if ($status === 'pending') {
+                    // Customer submitted the receipt, waiting for verification.
+                    pp_trigger_hook('pp_transaction_pending', $id);
+                } else {
+                    pp_trigger_hook('pp_transaction_ipn', $id);
                 }
             }
 

@@ -225,6 +225,16 @@
                                             
                                             <script>
                                                 function load_transaction_slip(){
+                                                    <?php
+                                                        $slip_url = (string) ($response_transaction_checker['response'][0]['payment_verify_id'] ?? '');
+                                                        if (preg_match('#^https?://[^\s"\'<>]+\.pdf$#i', $slip_url)) {
+                                                            $slip_url = htmlspecialchars($slip_url, ENT_QUOTES);
+                                                    ?>
+                                                    $('.response-transaction-slip').html('<iframe src="<?php echo $slip_url?>" style="width:100%;height:420px;border:0;"></iframe><center><a href="<?php echo $slip_url?>" target="_blank" rel="noopener" class="btn btn-primary btn-sm mt-2">Open PDF</a></center>');
+                                                    return;
+                                                    <?php
+                                                        }
+                                                    ?>
                                                     $('.response-transaction-slip').html('<center><img src="<?php if(isset($response_transaction_checker['response'][0]['payment_verify_id'])){if($response_transaction_checker['response'][0]['payment_verify_id'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $response_transaction_checker['response'][0]['payment_verify_id'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>" style="margin-top: 10px;max-width: 200px;"></center>');
                                                 }
                                                 load_transaction_slip();

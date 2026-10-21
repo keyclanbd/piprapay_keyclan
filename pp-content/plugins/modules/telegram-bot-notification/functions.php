@@ -210,9 +210,12 @@ function telegram_bot_send_photo($botToken, $chatId, $photoUrl, $caption) {
     $caption = (string) $caption;
     $caption = function_exists('mb_substr') ? mb_substr($caption, 0, 1000) : substr($caption, 0, 1000);
 
-    $result = telegram_bot_api_request($botToken, 'sendPhoto', [
+    // Receipts can be PDFs, which Telegram only accepts as documents.
+    $isPdf = (bool) preg_match('#\.pdf$#i', (string) parse_url($photoUrl, PHP_URL_PATH));
+
+    $result = telegram_bot_api_request($botToken, $isPdf ? 'sendDocument' : 'sendPhoto', [
         'chat_id' => $chatId,
-        'photo' => $photoUrl,
+        $isPdf ? 'document' : 'photo' => $photoUrl,
         'caption' => $caption,
     ]);
 
