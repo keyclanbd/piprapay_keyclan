@@ -496,7 +496,7 @@
                 <?php
                     }else{
                         if(isset($_GET['token'])){
-                            $order_id = $_GET['token'] ?? null;
+                            $order_id = preg_match('/^[A-Za-z0-9-]{1,64}$/', (string) ($_GET['token'] ?? '')) ? $_GET['token'] : null;
                             
                             if (!$order_id) {
                                 die("❌ No order ID provided");
@@ -514,7 +514,7 @@
                             curl_close($ch);
                             $data = json_decode($response, true);
                             
-                            if ($data['status'] == 'COMPLETED') {
+                            if (($data['status'] ?? '') == 'COMPLETED' && (string) ($data['purchase_units'][0]['reference_id'] ?? '') === (string) $payment_id) {
                                 $check_transactionid = pp_check_transaction_exits($data['purchase_units'][0]['payments']['captures'][0]['id']);
                                 if($check_transactionid['status'] == false){
                                     if(pp_set_transaction_byid($payment_id, $plugin_slug, $plugin_info['plugin_name'], $data['payer']['email_address'] ?? 'Unknown', $data['purchase_units'][0]['payments']['captures'][0]['id'], 'completed')){
@@ -540,6 +540,7 @@
                             $order_data = [
                                 "intent" => "CAPTURE",
                                 "purchase_units" => [[
+                                    "reference_id" => $payment_id,
                                     "amount" => [
                                         "currency_code" => "USD",
                                         "value" => $amount

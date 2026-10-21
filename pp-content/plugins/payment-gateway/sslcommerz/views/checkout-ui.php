@@ -468,7 +468,7 @@
                         if(isset($_GET['status'])){
                             if($_GET['status'] == "success"){
                                 $url = $base_url."/validator/api/merchantTransIDvalidationAPI.php";
-                                $url .= "?tran_id=".$_GET['session_id']."&store_id=".$settings['store_id']."&store_passwd=".$settings['store_password']."&format=json";
+                                $url .= "?tran_id=".urlencode((string) ($_GET['session_id'] ?? ''))."&store_id=".$settings['store_id']."&store_passwd=".$settings['store_password']."&format=json";
                                 
                                 $ch = curl_init();
                                 
@@ -479,7 +479,7 @@
 
                                 $data = json_decode($response, true);
         
-                                if (isset($data['APIConnect']) && $data['APIConnect'] === 'DONE' && isset($data['no_of_trans_found']) && $data['no_of_trans_found'] > 0 && isset($data['element'][0]['status']) && in_array($data['element'][0]['status'], ['VALID', 'VALIDATED'])){
+                                if (isset($data['APIConnect']) && $data['APIConnect'] === 'DONE' && isset($data['no_of_trans_found']) && $data['no_of_trans_found'] > 0 && isset($data['element'][0]['status']) && in_array($data['element'][0]['status'], ['VALID', 'VALIDATED']) && (string) ($data['element'][0]['value_a'] ?? '') === (string) $payment_id){
                                     $transaction = $data['element'][0];
                                     
                                     $check_transactionid = pp_check_transaction_exits($transaction['tran_id']);

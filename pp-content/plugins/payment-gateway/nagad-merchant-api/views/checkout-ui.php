@@ -500,10 +500,17 @@
                                 
                                 if (isset($buffer['status']) && $buffer['status'] =='Success'){
                                     $parts = explode("QPL", $buffer['orderId']);
-                                    $order_id = $parts[1];
-                                    
+                                    $order_id = $parts[1] ?? '';
+
                                     $check_transactionid = pp_check_transaction_exits($buffer['issuerPaymentRefNo']);
-                                    if($check_transactionid['status'] == false){
+                                    if((string) $order_id !== (string) $payment_id){
+                                        // The Nagad payment belongs to another checkout.
+                   ?>
+                                        <div class="alert alert-danger" role="alert">
+                                          Unable to verify this payment. Please contact support.
+                                        </div>
+                   <?php
+                                    }elseif($check_transactionid['status'] == false){
                                         if(pp_set_transaction_byid($payment_id, $plugin_slug, $plugin_info['plugin_name'], $buffer['clientMobileNo'], $buffer['issuerPaymentRefNo'], 'completed')){
                                             echo '<script>location.href="'.pp_get_paymentlink($payment_id).'";</script>';
                                         }

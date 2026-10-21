@@ -477,7 +477,7 @@
                                 $session = \Stripe\Checkout\Session::retrieve($session_id);
                                 $payment_intent = \Stripe\PaymentIntent::retrieve($session->payment_intent);
                             
-                                if ($payment_intent->status === 'succeeded') {
+                                if ($payment_intent->status === 'succeeded' && (string) ($session->client_reference_id ?? '') === (string) $payment_id) {
                                     $charge = $payment_intent->charges->data[0] ?? null;
                         
                                     $trxID = $charge ? $charge->id : $payment_intent->id;
@@ -530,6 +530,7 @@
                                 'quantity' => 1,
                             ]],
                             'mode' => 'payment',
+                            'client_reference_id' => $payment_id,
                             'success_url' => getCurrentUrl() . $separator . "status=success&session_id={CHECKOUT_SESSION_ID}",
                             'cancel_url' => getCurrentUrl() . $separator . "status=cancel",
                         ]);

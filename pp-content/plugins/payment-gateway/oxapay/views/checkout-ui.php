@@ -470,7 +470,17 @@
                             if($_GET['status'] == "ipn"){
                                 $postData = file_get_contents('php://input');
                                 $data = json_decode($postData, true);
-                                                                
+
+                                // OxaPay signs the raw body with the merchant API key; unsigned or
+                                // forged callbacks, or ones for another payment, are ignored.
+                                $receivedHmac = (string) ($_SERVER['HTTP_HMAC'] ?? '');
+                                $expectedHmac = hash_hmac('sha512', (string) $postData, (string) ($settings['merchant_api_key'] ?? ''));
+                                if (empty($settings['merchant_api_key']) || $receivedHmac === '' || !hash_equals($expectedHmac, $receivedHmac) ||
+                                    !is_array($data) || (string) ($data['orderId'] ?? '') !== (string) $payment_id) {
+                                    http_response_code(400);
+                                    exit('Invalid callback');
+                                }
+
                                 $success = ($data['status'] === 'Paid' );
                                 $transactionStatus = $success ? 'Success' : 'Failure';
                                 $invoiceId = $data['orderId'];

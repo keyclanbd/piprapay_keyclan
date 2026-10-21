@@ -517,7 +517,7 @@
                                 
                                 $data = json_decode($response, true);
 
-                                if (isset($data[0]['bank_status']) && $data[0]['bank_status'] == "Success") {
+                                if (isset($data[0]['bank_status']) && $data[0]['bank_status'] == "Success" && (string) ($data[0]['customer_order_id'] ?? '') === (string) $payment_id) {
                                     $check_transactionid = pp_check_transaction_exits($data[0]['bank_trx_id']);
                                     if($check_transactionid['status'] == false){
                                         if(pp_set_transaction_byid($payment_id, $plugin_slug, $plugin_info['plugin_name'], $data[0]['method'], $data[0]['bank_trx_id'], 'completed')){

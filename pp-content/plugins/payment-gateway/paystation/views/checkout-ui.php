@@ -466,9 +466,18 @@
                         }
                         
                         if(isset($_GET['status'])){
-                            if($_GET['status'] == "Successful"){
+                            // Only the invoice created for this payment in this browser may complete it.
+                            $expected_invoice = (string) ($_SESSION['paystation_invoice_'.$payment_id] ?? '');
+                            $returned_invoice = (string) ($_GET['invoice_number'] ?? '');
+                            if($_GET['status'] == "Successful" && ($expected_invoice === '' || !hash_equals($expected_invoice, $returned_invoice))){
+                   ?>
+                                <div class="alert alert-danger" role="alert">
+                                  Unable to verify this payment. Please contact support.
+                                </div>
+                   <?php
+                            }elseif($_GET['status'] == "Successful"){
                                 $header=array('merchantId:'.$settings['merchant_id']);
-                                $body=array('invoice_number' => $_GET['invoice_number']);
+                                $body=array('invoice_number' => $returned_invoice);
                 
                                 $url = curl_init($base_url.'/transaction-status');
                                 curl_setopt($url,CURLOPT_HTTPHEADER, $header);
@@ -535,8 +544,11 @@
 
                             $curl = curl_init();
                             
+                            $invoice_number = (string) rand();
+                            $_SESSION['paystation_invoice_'.$payment_id] = $invoice_number;
+
                             $postFields = array(
-                                'invoice_number' => rand(),
+                                'invoice_number' => $invoice_number,
                                 'currency' => 'BDT',
                                 'payment_amount' => $transaction_amount,
                                 'reference' => $payment_id,

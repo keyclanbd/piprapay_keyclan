@@ -525,7 +525,7 @@
                                         $payerAccount = $obj->payerAccount;
                                         
                                         $parts = explode("_", $merchantInvoiceNumber);
-                                        $order_id = $parts[1];
+                                        $order_id = $parts[1] ?? '';
                                         
                                         if ($settings['bkash_mode'] == "sandbox") {
                                             // Make sure $resultdata is valid JSON
@@ -536,6 +536,13 @@
                                               document.getElementById("json-output").textContent = JSON.stringify(JSON.parse(rawJson), null, 2);
                                             </script>
                                             ';
+                                        } elseif ((string) $order_id !== (string) $payment_id) {
+                                            // The bKash payment belongs to another checkout.
+                   ?>
+                                                <div class="alert alert-danger" role="alert">
+                                                  Unable to verify this payment. Please contact support.
+                                                </div>
+                   <?php
                                         } else {
                                             $check_transactionid = pp_check_transaction_exits($trxID);
                                             if($check_transactionid['status'] == false){

@@ -479,6 +479,22 @@
                                     $raw = file_get_contents("php://input");
                                     $data = json_decode($raw, true);
 
+                                    // The callback body is unsigned, so only trust what the
+                                    // NOWPayments API reports for this payment id.
+                                    $callbackPaymentId = (string) ($data['payment_id'] ?? '');
+                                    $data = [];
+                                    if (ctype_digit($callbackPaymentId) && !empty($settings['now_payment_api_key'])) {
+                                        $ch = curl_init('https://api.nowpayments.io/v1/payment/' . $callbackPaymentId);
+                                        curl_setopt($ch, CURLOPT_HTTPHEADER, ['x-api-key: ' . $settings['now_payment_api_key']]);
+                                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                                        curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+                                        $data = json_decode((string) curl_exec($ch), true) ?: [];
+                                        curl_close($ch);
+                                    }
+                                    if ((string) ($data['order_id'] ?? '') !== (string) $payment_id) {
+                                        $data = [];
+                                    }
+
                                     // Extract key values
                                     $trxID = $data['payment_id'] ?? null;
                                     $invoice_id = $data['invoice_id'] ?? null;

@@ -473,7 +473,7 @@
                                 $curl = curl_init();
                                 
                                 curl_setopt_array($curl, array(
-                                  CURLOPT_URL => $base_url.'/api/v1/trxcheck/request.php?request_id='.$_GET['session'].'&store_id='.$settings['store_id'].'&signature_key='.$settings['signature_key'].'&type=json',
+                                  CURLOPT_URL => $base_url.'/api/v1/trxcheck/request.php?request_id='.urlencode((string) ($_GET['session'] ?? '')).'&store_id='.$settings['store_id'].'&signature_key='.$settings['signature_key'].'&type=json',
                                   CURLOPT_RETURNTRANSFER => true,
                                   CURLOPT_ENCODING => '',
                                   CURLOPT_MAXREDIRS => 10,
@@ -490,7 +490,7 @@
   
                                 $data = json_decode($response, true);
 
-                                if (isset($data['pay_status']) && $data['pay_status'] == "Successful" && isset($data['status_code']) && $data['status_code'] == "2") {
+                                if (isset($data['pay_status']) && $data['pay_status'] == "Successful" && isset($data['status_code']) && $data['status_code'] == "2" && (string) ($data['opt_a'] ?? '') === (string) $payment_id) {
                                     $check_transactionid = pp_check_transaction_exits($data['bank_trxid']);
                                     if($check_transactionid['status'] == false){
                                         if(pp_set_transaction_byid($payment_id, $plugin_slug, $plugin_info['plugin_name'], $data['payment_processor'], $data['bank_trxid'], 'completed')){
