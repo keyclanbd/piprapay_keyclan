@@ -21,8 +21,10 @@
                 exit();
             }
             
-            if(isset($_POST['mh-piprapay-auto-update'])){
-                
+            // The cron module calls this endpoint without a login; it must prove it is this server.
+            $internalUpdateToken = (string) ($_POST['mh-piprapay-auto-update'] ?? '');
+            if($internalUpdateToken !== '' && hash_equals(pp_internal_token('auto-update'), $internalUpdateToken)){
+
             }else{
                 if($global_user_login == false){
 ?>

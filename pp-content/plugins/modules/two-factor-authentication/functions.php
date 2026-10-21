@@ -62,8 +62,28 @@ if(isset($_POST['two-factor-authentication-action'])){
 }
 
 
+// Proof that this admin session passed 2FA: bound to the session token and the 2FA secret,
+// so it cannot be forged and stops working when the session ends.
+function two_factor_authentication_session_proof($secret_key) {
+    $session = (string) ($_COOKIE['pp_admin'] ?? '');
+    if ($secret_key === '' || !preg_match('/^[a-f0-9]{64}$/i', $session)) {
+        return '';
+    }
+    return hash_hmac('sha256', $session, $secret_key);
+}
+
 if(isset($_POST['two-factor-authentication-action-login'])){
-    $auth_code = escape_string($_POST['auth_code']);
+    $auth_code = escape_string($_POST['auth_code'] ?? '');
+
+    // At most 5 wrong codes per 5 minutes.
+    $attempts = $_SESSION['pp_2fa_attempts'] ?? ['count' => 0, 'first' => time()];
+    if (time() - $attempts['first'] > 300) {
+        $attempts = ['count' => 0, 'first' => time()];
+    }
+    if ($attempts['count'] >= 5) {
+        echo json_encode(['status' => "false", 'message' => 'Too many attempts. Please try again in a few minutes.']);
+        exit();
+    }
 
     if($auth_code == ""){
         echo json_encode(['status' => "false", 'message' => 'Incorrect auth code']);
@@ -77,13 +97,17 @@ if(isset($_POST['two-factor-authentication-action-login'])){
         
         $secret_key = $settings['secret_key'] ?? '';
         
-        $isValid = $ga->verifyCode($secret_key, $auth_code, 2);
-        
-        if ($isValid) {
-            setsCookie('pp_two_factor_authentication', "auth");
-            
+        $isValid = $secret_key !== '' && $ga->verifyCode($secret_key, $auth_code, 2);
+        $proof = two_factor_authentication_session_proof($secret_key);
+
+        if ($isValid && $proof !== '') {
+            unset($_SESSION['pp_2fa_attempts']);
+            setsCookie('pp_two_factor_authentication', $proof);
+
             echo json_encode(['status' => "true", 'target' => 'dashboard']);
         } else {
+            $attempts['count']++;
+            $_SESSION['pp_2fa_attempts'] = $attempts;
             echo json_encode(['status' => "false", 'message' => 'Invalid code. Try again.']);
         }
     }
@@ -100,7 +124,8 @@ function two_factor_authentication_initialize() {
     $auth_status = $settings['auth_status'] ?? '';
     
     if($auth_status == "enable"){
-        if(checkCookie('pp_two_factor_authentication')){
+        $proof = two_factor_authentication_session_proof((string) ($settings['secret_key'] ?? ''));
+        if($proof !== '' && hash_equals($proof, (string) ($_COOKIE['pp_two_factor_authentication'] ?? ''))){
             
         }else{
            // setsCookie('pp_piprapay_vercel_themepaid', "paid");

@@ -19,19 +19,16 @@ function auto_update_checker() {
     $lastCheckTime = isset($lastLog['last_check']) ? strtotime($lastLog['last_check']) : 0;
     $now = time();
     
+    // Return rather than exit, so the other pp_cron hooks still run.
     if ($now - $lastCheckTime < $checkInterval) {
-        echo json_encode([
-            'status' => 'false',
-            'message' => 'Update check already performed within the last 24 hours.'
-        ]);
-        exit;
+        return;
     }
     
     // Perform cURL update
     $url = "https://{$_SERVER['HTTP_HOST']}/pp-auto-update";
     $postData = [
         'auto-update' => 'start',
-        'mh-piprapay-auto-update' => 'yes'
+        'mh-piprapay-auto-update' => pp_internal_token('auto-update')
     ];
     
     $ch = curl_init($url);
