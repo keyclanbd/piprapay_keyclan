@@ -1066,6 +1066,19 @@
             const cancelUrl = <?php echo json_encode($cancelUrl); ?>;
             const mainSiteUrl = 'https://' + window.location.host;
 
+            // Record the cancellation (?cancel marks the payment failed), then leave for the
+            // merchant's cancel page; without one, show our own failed page.
+            const cancelAndLeave = () => {
+                const cancelLink = window.location.pathname + '?cancel=1';
+                if (!cancelUrl || cancelUrl === '--') {
+                    window.location.href = cancelLink;
+                    return;
+                }
+                fetch(cancelLink, { credentials: 'same-origin', keepalive: true })
+                    .catch(() => {})
+                    .finally(() => { window.location.href = cancelUrl; });
+            };
+
             const formatTime = (seconds) => {
                 const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
                 const secs = String(seconds % 60).padStart(2, '0');
@@ -1088,8 +1101,7 @@
 
             renderTimer();
             if (remaining <= 0) {
-                const expiredUrl = cancelUrl && cancelUrl !== '--' ? cancelUrl : mainSiteUrl;
-                window.location.href = expiredUrl;
+                cancelAndLeave();
             } else if (timerEl || mobileTimerEl) {
                 const timerInterval = setInterval(() => {
                     if (remaining > 0) {
@@ -1105,8 +1117,7 @@
                             mobileTimerEl.style.pointerEvents = 'none';
                             mobileTimerEl.style.opacity = '0.5';
                         }
-                        const redirectUrl = cancelUrl && cancelUrl !== '--' ? cancelUrl : mainSiteUrl;
-                        window.location.href = redirectUrl;
+                        cancelAndLeave();
                     }
                 }, 1000);
             }
@@ -1124,11 +1135,8 @@
             const backBtn = document.querySelector('.back-btn');
             if (backBtn) {
                 backBtn.addEventListener('click', function() {
-                    const cancelUrl = this.getAttribute('data-cancel-url') || '';
-                    if (cancelUrl && cancelUrl !== '--') {
-                        window.location.href = cancelUrl;
-                    } else if (document.referrer) {
-                        window.history.back();
+                    if (window.confirm('Cancel this payment and return to the website?')) {
+                        cancelAndLeave();
                     }
                 });
             }

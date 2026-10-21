@@ -19,7 +19,7 @@
     $fee = number_format((float)($transaction_details['response'][0]['transaction_fee'] ?? 0), 2);
     $total = number_format((float)($transaction_details['response'][0]['transaction_amount'] ?? 0) + (float)($transaction_details['response'][0]['transaction_fee'] ?? 0), 2);
     $redirectUrl = $transaction_details['response'][0]['transaction_redirect_url'] ?? '';
-    $returnType = strtoupper($transaction_details['response'][0]['transaction_return_type'] ?? 'GET');
+    $returnType = strtoupper($transaction_details['response'][0]['transaction_return_type'] ?? 'GET') === 'POST' ? 'POST' : 'GET';
     $paymentMethod = $transaction_details['response'][0]['payment_method'] ?? 'Unknown';
 ?>
 <!DOCTYPE html>
@@ -78,8 +78,9 @@
 
         <script>
             (function() {
-                var target = <?php echo json_encode($redirectUrl !== '' && $redirectUrl !== '--' ? $redirectUrl : ''); ?>;
-                if (!target) return;
+                // Submit the same form as the button, so the merchant gets pp_id with its chosen method.
+                var form = document.getElementById('redirect-form');
+                if (!form) return;
                 var delay = 4000;
                 var remaining = Math.ceil(delay / 1000);
                 var msg = document.createElement('p');
@@ -94,7 +95,7 @@
                         msg.textContent = 'Redirecting in ' + remaining + ' seconds...';
                     } else {
                         clearInterval(interval);
-                        window.location.href = target;
+                        form.submit();
                     }
                 }, 1000);
             })();

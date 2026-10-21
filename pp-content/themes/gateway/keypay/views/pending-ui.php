@@ -21,7 +21,9 @@
     $paymentMethod = $transaction_details['response'][0]['payment_method'] ?? 'Unknown';
     $redirectUrl = $transaction_details['response'][0]['transaction_redirect_url'] ?? '';
     $mainSiteUrl = 'https://' . $_SERVER['HTTP_HOST'];
-    $targetUrl = ($redirectUrl !== '' && $redirectUrl !== '--') ? $redirectUrl : $mainSiteUrl;
+    $hasRedirect = $redirectUrl !== '' && $redirectUrl !== '--';
+    $targetUrl = $hasRedirect ? $redirectUrl : $mainSiteUrl;
+    $returnType = strtoupper($transaction_details['response'][0]['transaction_return_type'] ?? 'GET') === 'POST' ? 'POST' : 'GET';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,33 +59,39 @@
             <div class="rowx"><span>Total</span><strong><?php echo htmlspecialchars($total . ' ' . $currency); ?></strong></div>
         </div>
         <div class="actions">
-            <a href="<?php echo htmlspecialchars($targetUrl); ?>" class="btn-secondary" style="text-decoration:none;">
-                <i class="fas fa-arrow-left"></i> Back to Website
-            </a>
             <button type="button" class="btn-secondary" onclick="window.location.reload()">
                 <i class="fas fa-rotate"></i> Refresh Status
             </button>
+            <?php if ($hasRedirect): ?>
+            <form action="<?php echo htmlspecialchars($targetUrl); ?>" method="<?php echo $returnType; ?>" style="margin:0">
+                <input type="hidden" name="pp_id" value="<?php echo htmlspecialchars($transaction_details['response'][0]['pp_id'] ?? ''); ?>">
+                <button type="submit" class="btn-secondary"><i class="fas fa-arrow-left"></i> Back to Website</button>
+            </form>
+            <?php else: ?>
+            <a href="<?php echo htmlspecialchars($targetUrl); ?>" class="btn-secondary" style="text-decoration:none;">
+                <i class="fas fa-arrow-left"></i> Back to Website
+            </a>
+            <?php endif; ?>
         </div>
 
         <script>
+            // Stay here and re-check: once the payment is approved this page becomes
+            // the success page, which sends the customer back with pp_id.
             (function() {
-                var target = <?php echo json_encode($targetUrl); ?>;
-                var delay = 5000;
-                var remaining = Math.ceil(delay / 1000);
+                var remaining = 15;
                 var msg = document.createElement('p');
                 msg.style.cssText = 'color:#667085;font-size:13px;margin-top:12px';
-                msg.textContent = 'Redirecting in ' + remaining + ' seconds...';
                 document.querySelector('.actions').after(msg);
 
-                var interval = setInterval(function() {
-                    remaining--;
-                    if (remaining > 0) {
-                        msg.textContent = 'Redirecting in ' + remaining + ' seconds...';
-                    } else {
-                        clearInterval(interval);
-                        window.location.href = target;
+                var tick = function() {
+                    msg.textContent = 'Checking status again in ' + remaining + ' seconds...';
+                    if (remaining-- <= 0) {
+                        window.location.reload();
+                        return;
                     }
-                }, 1000);
+                    setTimeout(tick, 1000);
+                };
+                tick();
             })();
         </script>
     </div>

@@ -61,7 +61,10 @@
                 $timeout = defined('PP_PAYMENT_SESSION_TIMEOUT') ? (int) PP_PAYMENT_SESSION_TIMEOUT : 600;
                 $createdTime = ($createdAt !== '--') ? strtotime($createdAt) : false;
 
-                if ($createdTime !== false && (time() - $createdTime) > $timeout) {
+                // Only an unpaid checkout expires; paid, pending and late gateway returns must still load.
+                $currentStatus = $transaction_details['response'][0]['transaction_status'] ?? '';
+                if ($currentStatus === 'initialize' && !pp_is_gateway_return() &&
+                    $createdTime !== false && (time() - $createdTime) > $timeout) {
                     // Session window has closed. Mark it failed so a refresh can
                     // never hand the customer a fresh countdown.
                     pp_set_transaction_status($payment_id, 'failed');

@@ -52,6 +52,21 @@
         return !in_array($action, $publicActions, true);
     }
     
+    // A gateway sending the customer back (or calling its IPN) after the payment
+    // session window. These handlers verify with the provider, so they must still
+    // run after the checkout timed out, or a late but real payment is lost.
+    function pp_is_gateway_return() {
+        if (empty($_GET['method']) || !is_string($_GET['method'])) {
+            return false;
+        }
+        foreach (['status', 'Status', 'ppstatus', 'paymentID', 'token', 'session_id', 'session', 'invoice_number', 'payment_ref_id', 'MerchantTransactionId'] as $marker) {
+            if (isset($_GET[$marker])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Secret for server-to-server calls (cron -> auto-update), derived from
     // credentials only this installation knows.
     function pp_internal_token($purpose) {

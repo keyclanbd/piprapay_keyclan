@@ -336,7 +336,7 @@
                 </div>
             </div>
             
-            <a href="<?php echo $transaction_details['response'][0]['transaction_redirect_url']?>">
+            <a href="<?php $pp_back_url = (string) ($transaction_details['response'][0]['transaction_redirect_url'] ?? ''); echo htmlspecialchars(($pp_back_url === '' || $pp_back_url === '--') ? 'https://'.$_SERVER['HTTP_HOST'] : $pp_back_url, ENT_QUOTES); ?>">
                 <button class="btn-done" id="done-button">
                     <i class="fa fa-exclamation-triangle"></i> Back to website
                 </button>

@@ -20,6 +20,7 @@
     $total = number_format((float)($transaction_details['response'][0]['transaction_amount'] ?? 0) + (float)($transaction_details['response'][0]['transaction_fee'] ?? 0), 2);
     $redirectUrl = $transaction_details['response'][0]['transaction_cancel_url'] ?? '';
     $paymentMethod = $transaction_details['response'][0]['payment_method'] ?? 'Unknown';
+    $backUrl = ($redirectUrl !== '' && $redirectUrl !== '--') ? $redirectUrl : 'https://' . $_SERVER['HTTP_HOST'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,10 +58,7 @@
             <div class="rowx"><span>Total</span><strong><?php echo htmlspecialchars($total . ' ' . $currency); ?></strong></div>
         </div>
         <div class="actions">
-            <?php if ($redirectUrl !== '' && $redirectUrl !== '--'): ?>
-            <a href="<?php echo htmlspecialchars($redirectUrl); ?>" class="btn-main"><i class="fas fa-arrow-left"></i> Try Again</a>
-            <?php endif; ?>
-            <button type="button" class="btn-secondary" onclick="window.history.back()"><i class="fas fa-rotate-left"></i> Go Back</button>
+            <a href="<?php echo htmlspecialchars($backUrl); ?>" class="btn-main"><i class="fas fa-arrow-left"></i> Back to Website</a>
         </div>
     </div>
 </div>

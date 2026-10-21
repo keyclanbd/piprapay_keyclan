@@ -340,7 +340,7 @@
                 </div>
             </div>
             
-            <form action="<?php echo $transaction_details['response'][0]['transaction_redirect_url']?>" method="<?php echo $transaction_details['response'][0]['transaction_return_type']?>">
+            <form action="<?php $pp_back_url = (string) ($transaction_details['response'][0]['transaction_redirect_url'] ?? ''); echo htmlspecialchars(($pp_back_url === '' || $pp_back_url === '--') ? 'https://'.$_SERVER['HTTP_HOST'] : $pp_back_url, ENT_QUOTES); ?>" method="<?php echo $transaction_details['response'][0]['transaction_return_type']?>">
                 <input type="hidden" name="pp_id" value="<?php echo $transaction_details['response'][0]['pp_id']?>">
                 <button class="btn-done" id="done-button">
                     <i class="fas fa-check-circle"></i> Back to website

@@ -13,7 +13,9 @@
         $faq_list = pp_get_faq();
         $support_links = pp_get_support_links();
         
-        if($transaction_details['response'][0]['transaction_status'] == "initialize"){
+        // A failed (timed-out) checkout still lets the gateway return be verified.
+        $status_now = $transaction_details['response'][0]['transaction_status'];
+        if($status_now == "initialize" || ($status_now == "failed" && pp_is_gateway_return())){
             if(isset($_GET['method'])){
                 $raw_method = $_GET['method'];
                 $clean_method = explode('/', $raw_method)[0];
