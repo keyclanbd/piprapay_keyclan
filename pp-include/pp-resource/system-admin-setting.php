@@ -287,9 +287,9 @@
                             foreach($global_data_count['response'] as $data){
                         ?>
                               <tr>
-                                <td class="align-items-center"><?php echo $data['browser'];?> on <?php echo $data['device'];?></td>
-                                <td><i class="bi-laptop fs-3 me-2"></i> <?php echo $data['device'];?> <?php if($data['cookie'] == getCookie('pp_admin')){echo '<span class="badge bg-soft-success text-success ms-1">Current</span>';}?></td>
-                                <td><?php echo $data['ip'];?></td>
+                                <td class="align-items-center"><?php echo htmlspecialchars((string) $data['browser'], ENT_QUOTES);?> on <?php echo htmlspecialchars((string) $data['device'], ENT_QUOTES);?></td>
+                                <td><i class="bi-laptop fs-3 me-2"></i> <?php echo htmlspecialchars((string) $data['device'], ENT_QUOTES);?> <?php if($data['cookie'] == getCookie('pp_admin')){echo '<span class="badge bg-soft-success text-success ms-1">Current</span>';}?></td>
+                                <td><?php echo htmlspecialchars((string) $data['ip'], ENT_QUOTES);?></td>
                                 <td><?php echo timeAgo($data['created_at']);?></td>
                               </tr>
                         <?php

@@ -429,8 +429,8 @@
                 
                 <div class="invoice-to">
                     <div class="meta-label">Bill To</div>
-                    <div class="meta-value"><?php echo $invoice_details['response'][0]['c_name']?></div>
-                    <div class="meta-value"><?php echo $invoice_details['response'][0]['c_email_mobile']?></div>
+                    <div class="meta-value"><?php echo htmlspecialchars((string) ($invoice_details['response'][0]['c_name'] ?? ''), ENT_QUOTES)?></div>
+                    <div class="meta-value"><?php echo htmlspecialchars((string) ($invoice_details['response'][0]['c_email_mobile'] ?? ''), ENT_QUOTES)?></div>
                 </div>
             </div>
             

@@ -52,6 +52,22 @@
         return !in_array($action, $publicActions, true);
     }
     
+    // Secret for server-to-server calls (cron -> auto-update), derived from
+    // credentials only this installation knows.
+    function pp_internal_token($purpose) {
+        global $db_host, $db_user, $db_pass, $db_name, $db_prefix;
+        return hash_hmac('sha256', 'pp-internal|' . $purpose, $db_host . '|' . $db_user . '|' . $db_pass . '|' . $db_name . '|' . $db_prefix);
+    }
+
+    // Admin list pages insert JSON values straight into HTML, so customer-supplied
+    // text (names, numbers, transaction ids, SMS text) must arrive escaped.
+    function pp_escape_html_deep($value) {
+        if (is_array($value)) {
+            return array_map('pp_escape_html_deep', $value);
+        }
+        return is_string($value) ? htmlspecialchars($value, ENT_QUOTES, 'UTF-8') : $value;
+    }
+
     function hexToRgba($hex, $opacity = 1.0) {
         // Remove "#" if present
         $hex = ltrim($hex, '#');
@@ -1338,7 +1354,13 @@ function deleteData($tableName, $condition) {
     function payment_gateway_include($slug, $payment_id) {
         $conn = connectDatabase();
         global $db_prefix;
-        
+
+        // The slug comes from the public ?method= parameter.
+        if (!is_string($slug) || !preg_match('/^[a-z0-9_-]{1,64}$/i', $slug)) {
+            echo '<div class="alert alert-warning m-3">This payment gateway is not available for this transaction.</div>';
+            return;
+        }
+
         $res_plugins = json_decode(getData($db_prefix.'plugins', 'WHERE plugin_slug="'.$slug.'" AND status="active"'), true);
         
         if($res_plugins['status'] == true){

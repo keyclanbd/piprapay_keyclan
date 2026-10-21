@@ -474,7 +474,7 @@ if($action == "forgot-password"){
                 
                 echo json_encode([
                     "status" => 'true',
-                    "data" => $pp_transaction,
+                    "data" => pp_escape_html_deep($pp_transaction),
                     "showing" => $showing,
                     "total" => $total,
                     "totalPages" => $totalPages,
@@ -662,7 +662,21 @@ if($action == "forgot-password"){
                     echo json_encode(["status" => "error", "message" => "Error: Demo mode is active"]);
                     exit();
                 }
-                
+
+                // Declared up front: the error paths below clean up the extracted temp folder.
+                if (!function_exists('deleteFolders')) {
+                    function deleteFolders($folder) {
+                        foreach (glob($folder . '/*') as $file) {
+                            if (is_dir($file)) {
+                                deleteFolders($file);
+                            } else {
+                                unlink($file);
+                            }
+                        }
+                        rmdir($folder);
+                    }
+                }
+
                 
                 if (!isset($_FILES['zip_file']) || $_FILES['zip_file']['error'] !== 0) {
                     echo json_encode(["status" => "error", "message" => "No file uploaded."]);
@@ -689,8 +703,8 @@ if($action == "forgot-password"){
                         exit;
                     }
                     for ($i = 0; $i < $zip->numFiles; $i++) {
-                        $entryName = str_replace('\\\\', '/', $zip->getNameIndex($i));
-                        if ($entryName === '' || str_starts_with($entryName, '/') || preg_match('#(^|/)\.\.(/|$)#', $entryName)) {
+                        $entryName = str_replace('\\', '/', (string) $zip->getNameIndex($i));
+                        if ($entryName === '' || $entryName[0] === '/' || preg_match('#(^|/)\.\.(/|$)#', $entryName) || preg_match('#^[A-Za-z]:#', $entryName)) {
                             $zip->close();
                             deleteFolders($tempDir);
                             echo json_encode(["status" => "error", "message" => "Invalid ZIP path."]);
@@ -720,6 +734,7 @@ if($action == "forgot-password"){
                     if (file_exists($tempDir . "meta.json")) {
                         $pluginJson = $tempDir . "meta.json";
                     } else {
+                        deleteFolders($tempDir);
                         echo json_encode(["status" => "error", "message" => "meta.json not found in the ZIP."]);
                         exit;
                     }
@@ -805,16 +820,6 @@ if($action == "forgot-password"){
                 }
                 
                 // Cleanup
-                function deleteFolders($folder) {
-                    foreach (glob($folder . '/*') as $file) {
-                        if (is_dir($file)) {
-                            deleteFolders($file);
-                        } else {
-                            unlink($file);
-                        }
-                    }
-                    rmdir($folder);
-                }
                 deleteFolders($tempDir);
                 
                 echo json_encode([
@@ -1065,7 +1070,7 @@ if($action == "forgot-password"){
                 
                 echo json_encode([
                     "status" => 'true',
-                    "data" => $pp_transaction,
+                    "data" => pp_escape_html_deep($pp_transaction),
                 ]);
             }
             
@@ -1102,7 +1107,7 @@ if($action == "forgot-password"){
                 
                 echo json_encode([
                     "status" => 'true',
-                    "data" => $pp_transaction,
+                    "data" => pp_escape_html_deep($pp_transaction),
                     "total" => $total,
                     "showing" => $showing,
                     "totalPages" => $totalPages,
@@ -1166,7 +1171,7 @@ if($action == "forgot-password"){
                 
                 echo json_encode([
                     "status" => 'true',
-                    "data" => $pp_transaction,
+                    "data" => pp_escape_html_deep($pp_transaction),
                     "total" => $total,
                     "showing" => $showing,
                     "totalPages" => $totalPages,
@@ -1343,7 +1348,7 @@ if($action == "forgot-password"){
                 
                 echo json_encode([
                     "status" => 'true',
-                    "data" => $pp_transaction,
+                    "data" => pp_escape_html_deep($pp_transaction),
                     "total" => $total,
                     "showing" => $showing,
                     "totalPages" => $totalPages,
@@ -1493,7 +1498,7 @@ if($action == "forgot-password"){
                 
                 echo json_encode([
                     "status" => 'true',
-                    "data" => $pp_transaction,
+                    "data" => pp_escape_html_deep($pp_transaction),
                     "total" => $total,
                     "showing" => $showing,
                     "totalPages" => $totalPages,
@@ -1606,7 +1611,7 @@ if($action == "forgot-password"){
                 
                 echo json_encode([
                     "status" => 'true',
-                    "data" => $pp_transaction,
+                    "data" => pp_escape_html_deep($pp_transaction),
                     "total" => $total,
                     "showing" => $showing,
                     "totalPages" => $totalPages,
@@ -1814,7 +1819,7 @@ if($action == "forgot-password"){
                 
                 echo json_encode([
                     "status" => 'true',
-                    "data" => $pp_transaction,
+                    "data" => pp_escape_html_deep($pp_transaction),
                     "total" => $total,
                     "showing" => $showing,
                     "totalPages" => $totalPages,
@@ -2062,7 +2067,7 @@ $pl_id = bin2hex(random_bytes(12));
                 
                 echo json_encode([
                     "status" => 'true',
-                    "data" => $pp_transaction,
+                    "data" => pp_escape_html_deep($pp_transaction),
                     "total" => $total,
                     "showing" => $showing,
                     "totalPages" => $totalPages,

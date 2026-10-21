@@ -655,12 +655,12 @@
                         <ul class="list-unstyled p-4" style="font-size: 15px;margin: 0;">
                             <li class="d-flex justify-content-between">
                                 <span class="fw-semibold text-secondary">Name:</span>
-                                <span class="fw-semibold text-secondary"><?php echo $transaction_details['response'][0]['c_name']?></span>
+                                <span class="fw-semibold text-secondary"><?php echo htmlspecialchars((string) ($transaction_details['response'][0]['c_name'] ?? ''), ENT_QUOTES)?></span>
                             </li>
                             <hr class="my-2 border-secondary opacity-10">
                             <li class="d-flex justify-content-between">
                                 <span class="fw-semibold text-secondary">Email or Mobile:</span>
-                                <span class="fw-semibold text-secondary"><?php echo $transaction_details['response'][0]['c_email_mobile']?></span>
+                                <span class="fw-semibold text-secondary"><?php echo htmlspecialchars((string) ($transaction_details['response'][0]['c_email_mobile'] ?? ''), ENT_QUOTES)?></span>
                             </li>
                             <hr class="my-2 border-secondary opacity-10">
                             <li class="d-flex justify-content-between">

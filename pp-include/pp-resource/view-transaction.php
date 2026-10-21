@@ -104,7 +104,7 @@
                     <div class="row">
                       <div class="col-sm-4 mb-3">
                         <label class="form-label fw-medium text-dark">Payment ID</label>
-                        <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['pp_id']?></div>
+                        <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['pp_id'] ?? ''), ENT_QUOTES)?></div>
                       </div>
                       
                       <div class="col-sm-4 mb-3">
@@ -185,17 +185,17 @@
                                 <div class="row">
                                   <div class="col-sm-4 mb-3">
                                     <label class="form-label fw-medium text-dark">Payment Method</label>
-                                    <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['payment_method']?></div>
+                                    <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['payment_method'] ?? ''), ENT_QUOTES)?></div>
                                   </div>
                                   
                                   <div class="col-sm-4 mb-3">
                                     <label class="form-label fw-medium text-dark">Payment Curreny</label>
-                                    <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['transaction_currency']?></div>
+                                    <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['transaction_currency'] ?? ''), ENT_QUOTES)?></div>
                                   </div>
                                   
                                   <div class="col-sm-4 mb-3">
                                     <label class="form-label fw-medium text-dark">Sender</label>
-                                    <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['payment_sender_number']?></div>
+                                    <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['payment_sender_number'] ?? ''), ENT_QUOTES)?></div>
                                   </div>
                                   
                                   <?php
@@ -235,7 +235,7 @@
                                                     <?php
                                                         }
                                                     ?>
-                                                    $('.response-transaction-slip').html('<center><img src="<?php if(isset($response_transaction_checker['response'][0]['payment_verify_id'])){if($response_transaction_checker['response'][0]['payment_verify_id'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo $response_transaction_checker['response'][0]['payment_verify_id'];};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>" style="margin-top: 10px;max-width: 200px;"></center>');
+                                                    $('.response-transaction-slip').html('<center><img src="<?php if(isset($response_transaction_checker['response'][0]['payment_verify_id'])){if($response_transaction_checker['response'][0]['payment_verify_id'] == "--"){echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}else{echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['payment_verify_id'] ?? ''), ENT_QUOTES);};}else{echo 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';}?>" style="margin-top: 10px;max-width: 200px;"></center>');
                                                 }
                                                 load_transaction_slip();
                                             </script>
@@ -244,7 +244,7 @@
                                   ?>
                                           <div class="col-sm-4 mb-3">
                                             <label class="form-label fw-medium text-dark">Transaction Id</label>
-                                            <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['payment_verify_id']?></div>
+                                            <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['payment_verify_id'] ?? ''), ENT_QUOTES)?></div>
                                           </div>
                                   <?php
                                       }
@@ -263,27 +263,27 @@
                                 <div class="row">
                                   <div class="col-sm-4 mb-3">
                                     <label class="form-label fw-medium text-dark">Amount</label>
-                                    <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['transaction_currency'].' '.number_format($response_transaction_checker['response'][0]['transaction_amount'],2)?></div>
+                                    <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['transaction_currency'] ?? ''), ENT_QUOTES).' '.number_format($response_transaction_checker['response'][0]['transaction_amount'],2)?></div>
                                   </div>
                                   
                                   <div class="col-sm-4 mb-3">
                                     <label class="form-label fw-medium text-dark">Processing Fee</label>
-                                    <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['transaction_currency'].' '.number_format($response_transaction_checker['response'][0]['transaction_fee'],2)?></div>
+                                    <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['transaction_currency'] ?? ''), ENT_QUOTES).' '.number_format($response_transaction_checker['response'][0]['transaction_fee'],2)?></div>
                                   </div>
                                   
                                   <div class="col-sm-4 mb-3">
                                     <label class="form-label fw-medium text-dark">Total amount</label>
-                                    <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['transaction_currency'].' '.number_format($response_transaction_checker['response'][0]['transaction_amount']+$response_transaction_checker['response'][0]['transaction_fee'],2)?></div>
+                                    <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['transaction_currency'] ?? ''), ENT_QUOTES).' '.number_format($response_transaction_checker['response'][0]['transaction_amount']+$response_transaction_checker['response'][0]['transaction_fee'],2)?></div>
                                   </div>
 
                                   <div class="col-sm-4 mb-3">
                                     <label class="form-label fw-medium text-dark">Refunded amount</label>
-                                    <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['transaction_currency'].' '.number_format($response_transaction_checker['response'][0]['transaction_refund_amount'],2)?></div>
+                                    <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['transaction_currency'] ?? ''), ENT_QUOTES).' '.number_format($response_transaction_checker['response'][0]['transaction_refund_amount'],2)?></div>
                                   </div>
                                   
                                   <div class="col-sm-4 mb-3">
                                     <label class="form-label fw-medium text-dark">Net Amount</label>
-                                    <div class="fw-bold text-dark"><strong><?php echo $response_transaction_checker['response'][0]['transaction_currency'].' '.number_format($response_transaction_checker['response'][0]['transaction_amount']+$response_transaction_checker['response'][0]['transaction_fee']-$response_transaction_checker['response'][0]['transaction_refund_amount'],2)?></strong></div>
+                                    <div class="fw-bold text-dark"><strong><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['transaction_currency'] ?? ''), ENT_QUOTES).' '.number_format($response_transaction_checker['response'][0]['transaction_amount']+$response_transaction_checker['response'][0]['transaction_fee']-$response_transaction_checker['response'][0]['transaction_refund_amount'],2)?></strong></div>
                                   </div>
                                 </div>
                             </div>
@@ -294,12 +294,12 @@
                             <div class="row">
                               <div class="col-sm-4 mb-3">
                                 <label class="form-label fw-medium text-dark">Name</label>
-                                <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['c_name']?></div>
+                                <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['c_name'] ?? ''), ENT_QUOTES)?></div>
                               </div>
                               
                               <div class="col-sm-4 mb-3">
                                 <label class="form-label fw-medium text-dark">Email or Mobile</label>
-                                <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['c_email_mobile']?></div>
+                                <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['c_email_mobile'] ?? ''), ENT_QUOTES)?></div>
                               </div>
                             </div>
                       </div>
@@ -311,12 +311,12 @@
                                     <div class="row">
                                       <div class="col-sm-6 mb-3">
                                         <label class="form-label fw-medium text-dark">Name</label>
-                                        <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['transaction_product_name']?></div>
+                                        <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['transaction_product_name'] ?? ''), ENT_QUOTES)?></div>
                                       </div>
                                       
                                       <div class="col-sm-6 mb-3">
                                         <label class="form-label fw-medium text-dark">Description</label>
-                                        <div class="fw-bold text-dark"><?php echo $response_transaction_checker['response'][0]['transaction_product_description']?></div>
+                                        <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['transaction_product_description'] ?? ''), ENT_QUOTES)?></div>
                                       </div>
                                       
                                         <?php
@@ -340,7 +340,7 @@
                                                                 if (is_array($value)) {
                                                                     // Handle arrays like Screenshot
                                                                     foreach ($value as $item) {
-                                                                        if (filter_var($item, FILTER_VALIDATE_URL)) {
+                                                                        if (filter_var($item, FILTER_VALIDATE_URL) && preg_match('#^https?://#i', (string) $item)) {
                                                                             echo "<a href='" . htmlspecialchars($item) . "' target='_blank'>View Image</a><br>";
                                                                         } else {
                                                                             echo htmlspecialchars(json_encode($item));
@@ -380,7 +380,7 @@
                 $("."+bclass).html('<div class="spinner-border spinner-border-sm" role="status"> <span class="visually-hidden">Loading...</span> </div>');
                 $("."+bclass).prop("disabled", true);
     
-                var ids = [<?php echo $_GET['ref'];?>];
+                var ids = [<?php echo (int) $_GET['ref'];?>];
 
                 var formData = new FormData();
 formData.append('action', 'pp_bulk_action_transaction');
@@ -405,7 +405,7 @@ formData.append('action', 'pp_bulk_action_transaction');
                             $(".response-bulk-action").html('<div class="alert alert-danger" style="margin-top: 20px; margin-bottom: -1px;" role="alert">'+response.message+'</div>');
                         } else {
                             $(".response-bulk-action").html('');
-                            load_content('Transaction','view-transaction?ref=<?php echo $_GET['ref'];?>','nav-btn-transaction');
+                            load_content('Transaction','view-transaction?ref=<?php echo (int) $_GET['ref'];?>','nav-btn-transaction');
                         }
                     }
                 });
