@@ -29,9 +29,16 @@
     
     $global_user_ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
 
+    // Session tokens are bin2hex(random_bytes(32)); anything else never reaches the query.
+    $isSessionToken = function($token) {
+        return is_string($token) && preg_match('/^[a-f0-9]{64}$/i', $token) === 1;
+    };
+
     if(checkCookie('pp_admin')){
         $adminCookie = getCookie('pp_admin');
-        $global_cookie_response = json_decode(getData($db_prefix.'browser_log', 'WHERE cookie="'.$adminCookie.'" AND status="active"'), true);
+        $global_cookie_response = $isSessionToken($adminCookie)
+            ? json_decode(getData($db_prefix.'browser_log', 'WHERE cookie="'.$adminCookie.'" AND status="active"'), true)
+            : ['status' => false];
         if($global_cookie_response['status'] == true){
             $storedIp = $global_cookie_response['response'][0]['ip'] ?? '';
             if ($storedIp !== $global_user_ip) {
@@ -49,8 +56,10 @@
         }
     }else{
         if(isset($_POST['pp_admin_session'])){
-            $sessionToken = escape_string($_POST['pp_admin_session']);
-            $global_cookie_response = json_decode(getData($db_prefix.'browser_log', 'WHERE cookie="'.$sessionToken.'" AND status="active"'), true);
+            $sessionToken = $_POST['pp_admin_session'];
+            $global_cookie_response = $isSessionToken($sessionToken)
+                ? json_decode(getData($db_prefix.'browser_log', 'WHERE cookie="'.$sessionToken.'" AND status="active"'), true)
+                : ['status' => false];
             if($global_cookie_response['status'] == true){
                 $storedIp = $global_cookie_response['response'][0]['ip'] ?? '';
                 if ($storedIp !== $global_user_ip) {
@@ -84,11 +93,6 @@
                 'forgot-password',
                 'pp-invoice-payment-link',
                 'pp-invoice-link',
-                'pp_view_transaction',
-                'pp_view_invoice',
-                'pp_view_invoice_customer',
-                'pp_view_payment_link',
-                'pp_view_transaction_detail',
             ];
             $requiresCsrf = !in_array($action, $csrfExempt, true);
             $csrfToken = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
@@ -417,7 +421,7 @@ if($action == "forgot-password"){
             
             
             if($action == "pp_transaction"){
-                $transaction_status = $_POST['transaction_status'];
+                $transaction_status = escape_string($_POST['transaction_status'] ?? '');
                 $search = escape_string($_POST['search']);
                 $visibility = escape_string($_POST['visibility']);
                 
@@ -480,8 +484,8 @@ if($action == "forgot-password"){
             
             
             if($action == "pp_view_transaction"){
-                $payment_id = $_POST['payment_id'];
-                
+                $payment_id = (int) ($_POST['payment_id'] ?? 0);
+
                 // Fetch the transaction
                 $response = json_decode(getData($db_prefix . 'transaction', 'WHERE id="' . $payment_id . '"'), true);
                 
@@ -1443,7 +1447,7 @@ if($action == "forgot-password"){
                 $page = isset($_POST['page']) ? intval($_POST['page']) : 1;
                 $offset = ($page - 1) * $limit;
                 
-                $sms_status = $_POST['sms_status'];
+                $sms_status = escape_string($_POST['sms_status'] ?? '');
                 
                 if($sms_status == "all"){
                     $sms_status = "";
@@ -1562,7 +1566,7 @@ if($action == "forgot-password"){
                 $page = isset($_POST['page']) ? intval($_POST['page']) : 1;
                 $offset = ($page - 1) * $limit;
                 
-                $sms_status = $_POST['sms_status'];
+                $sms_status = escape_string($_POST['sms_status'] ?? '');
                 
                 if($sms_status == "all"){
                     $sms_status = "";
@@ -1770,7 +1774,7 @@ if($action == "forgot-password"){
                 $page = isset($_POST['page']) ? intval($_POST['page']) : 1;
                 $offset = ($page - 1) * $limit;
                 
-                $payment_link_status = $_POST['payment_link_status'];
+                $payment_link_status = escape_string($_POST['payment_link_status'] ?? '');
                 
                 if($payment_link_status == "all"){
                     $payment_link_status = "";
@@ -1819,7 +1823,7 @@ if($action == "forgot-password"){
             }
             
             if ($action == "pp_view_payment_link") {
-                $pl_id = $_POST['pl_id'];
+                $pl_id = escape_string($_POST['pl_id'] ?? '');
                 
                 // Fetch the transaction
                 $response = json_decode(getData($db_prefix . 'payment_link', 'WHERE pl_id="' . $pl_id . '"'), true);
@@ -1990,7 +1994,7 @@ $pl_id = bin2hex(random_bytes(12));
                 $page = isset($_POST['page']) ? intval($_POST['page']) : 1;
                 $offset = ($page - 1) * $limit;
                 
-                $payment_link_status = $_POST['payment_link_status'];
+                $payment_link_status = escape_string($_POST['payment_link_status'] ?? '');
                 
                 if($payment_link_status == "all"){
                     $payment_link_status = "";
@@ -2067,7 +2071,7 @@ $pl_id = bin2hex(random_bytes(12));
             }
             
             if ($action == "pp_view_invoice") {
-                $invoice_id = $_POST['invoice_id'];
+                $invoice_id = (int) ($_POST['invoice_id'] ?? 0);
                 
                 // Fetch the transaction
                 $response = json_decode(getData($db_prefix . 'invoice', 'WHERE id="' . $invoice_id . '"'), true);

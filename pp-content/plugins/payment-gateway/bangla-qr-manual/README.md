@@ -177,7 +177,6 @@ ORDER BY id DESC
 +-- bangla-qr-manual-class.php
 +-- meta.json
 +-- readme.txt
-+-- upload.php
 +-- bangla-qr-manual-piprapay-v2.zip
 ```
 
@@ -187,7 +186,6 @@ ORDER BY id DESC
 |------|-------------|
 | `bangla-qr-manual-class.php` | Main plugin class with all core logic |
 | `meta.json` | Plugin metadata and configuration |
-| `upload.php` | Plugin upload handler |
 | `views/admin-ui.php` | Admin settings page UI |
 | `views/checkout-ui.php` | Customer checkout interface |
 | `assets/bangla-qr-manual-default.jpg` | Default Bangla QR Manual image |

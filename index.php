@@ -21,9 +21,10 @@ if (file_exists(__DIR__."/pp-config.php")) {
         }
 
         if (isset($_GET['webhook'])) {
-            $webhook = escape_string($_GET['webhook']);
+            $webhook = (string) $_GET['webhook'];
 
-            if ($webhook == "") {
+            // A site that never generated a key still holds the '--' default, which must not match.
+            if (!preg_match('/^[A-Za-z0-9]{16,}$/', $webhook)) {
                 echo 'System is under maintenance. Please try again later.';
                 exit();
             } else {

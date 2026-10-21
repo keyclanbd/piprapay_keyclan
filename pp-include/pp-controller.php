@@ -48,7 +48,7 @@
     }
 
     function isAdminActionAllowed($action) {
-        $publicActions = ['login', 'forgot-password', 'pp-invoice-payment-link', 'pp-invoice-link', 'pp_view_transaction', 'pp_view_invoice', 'pp_view_invoice_customer', 'pp_view_payment_link', 'pp_view_transaction_detail'];
+        $publicActions = ['login', 'forgot-password', 'pp-invoice-payment-link', 'pp-invoice-link'];
         return !in_array($action, $publicActions, true);
     }
     
