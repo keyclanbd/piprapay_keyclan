@@ -225,31 +225,44 @@ function telegram_bot_send_photo($botToken, $chatId, $photoUrl, $caption) {
 }
 
 /**
- * Site url of this installation, safe for use in notification links.
+ * Emoji used in front of a notification title.
  */
-function telegram_bot_site_url() {
-    $host = preg_replace('/[^A-Za-z0-9.\-]/', '', (string) ($_SERVER['HTTP_HOST'] ?? ''));
+function telegram_bot_status_emoji($status) {
+    $emojis = [
+        'initialize' => '🆕',
+        'pending' => '⏳',
+        'completed' => '✅',
+        'failed' => '❌',
+        'refunded' => '💰',
+        'unpaid' => '🧾',
+        'paid' => '✅',
+        'cancelled' => '❌',
+    ];
 
-    return $host === '' ? '' : 'https://' . $host;
+    return $emojis[strtolower((string) $status)] ?? '🔔';
 }
 
 /**
- * Receiving number configured on the payment gateway, if any.
+ * Account the customer paid from, filled in on the checkout page.
  */
-function telegram_bot_gateway_number($paymentMethodId) {
-    $paymentMethodId = trim((string) $paymentMethodId);
-    if ($paymentMethodId === '' || $paymentMethodId === '--') {
-        return '';
+function telegram_bot_account_line($senderNumber, $contact, $name) {
+    $senderNumber = trim((string) $senderNumber);
+    $contact = trim((string) $contact);
+    $name = trim((string) $name);
+
+    if ($senderNumber !== '' && $senderNumber !== '--') {
+        return $senderNumber;
     }
 
-    $gatewaySettings = pp_get_plugin_setting($paymentMethodId, false);
-    if (!is_array($gatewaySettings)) {
-        return '';
+    if ($contact !== '' && $contact !== '--') {
+        return $contact;
     }
 
-    $number = trim((string) ($gatewaySettings['payment_number'] ?? ''));
+    if ($name !== '' && $name !== '--') {
+        return $name;
+    }
 
-    return ($number === '' || $number === '--') ? '' : $number;
+    return 'Unknown';
 }
 
 /**
@@ -337,38 +350,40 @@ function telegram_bot_notification_transaction_event($transaction_id, $event) {
     $currency = !empty($t['transaction_currency']) ? $t['transaction_currency'] : '';
     $fee = !empty($t['transaction_fee']) ? $t['transaction_fee'] : '';
     $refund = !empty($t['transaction_refund_amount']) ? $t['transaction_refund_amount'] : '';
-    $name = !empty($t['c_name']) ? $t['c_name'] : 'Unknown payer';
+    $name = !empty($t['c_name']) ? $t['c_name'] : '';
     $contact = !empty($t['c_email_mobile']) ? $t['c_email_mobile'] : '';
-    $method = !empty($t['payment_method']) ? $t['payment_method'] : '--';
+    $method = !empty($t['payment_method']) ? $t['payment_method'] : '';
     $senderNumber = !empty($t['payment_sender_number']) ? $t['payment_sender_number'] : '';
-    $verifyWay = (string) ($t['payment_verify_way'] ?? '');
     $verifyId = !empty($t['payment_verify_id']) ? (string) $t['payment_verify_id'] : '';
     $ppId = !empty($t['pp_id']) ? $t['pp_id'] : $transaction_id;
 
-    $tx_id = ($verifyWay !== 'slip' && $verifyId !== '' && $verifyId !== '--') ? $verifyId : $ppId;
+    // The checkout stores the reference id or the receipt image in the same field,
+    // a link means the customer uploaded a receipt instead of typing a reference.
+    $verifyIsLink = (bool) preg_match('#^https?://#i', $verifyId);
+    $transactionId = (!$verifyIsLink && $verifyId !== '' && $verifyId !== '--') ? $verifyId : '';
+    $receipt = $verifyIsLink ? $verifyId : '';
 
     if ($event === 'created') {
-        $title = "New Transaction";
-        $note = "Awaiting payment";
+        $title = "🆕 New Transaction";
     } elseif ($event === 'pending') {
-        $title = "Transaction Pending";
-        $note = "Awaiting verification";
+        $title = "⏳ Transaction Pending";
     } else {
-        $title = "Transaction $status";
-        $note = "";
+        $title = telegram_bot_status_emoji($rawStatus) . " Transaction $status";
     }
 
     $lines = [
         $title,
-        "ID: $tx_id",
+        "ID: $ppId",
         "Status: $status",
+        "Amount: $amount $currency",
+        "Method: " . ($method !== '' && $method !== '--' ? $method : 'Not selected yet'),
+        "Customer Account: " . telegram_bot_account_line($senderNumber, $contact, $name),
     ];
 
-    if ($note !== '') {
-        $lines[] = $note;
+    // Gateway transaction id, filled in by the customer on the checkout page.
+    if ($transactionId !== '') {
+        $lines[] = "Transaction ID: $transactionId";
     }
-
-    $lines[] = "Amount: $amount $currency";
 
     if ($fee !== '' && $fee !== '--' && (float) $fee > 0) {
         $lines[] = "Fee: $fee $currency";
@@ -378,19 +393,6 @@ function telegram_bot_notification_transaction_event($transaction_id, $event) {
         $lines[] = "Refund: $refund $currency";
     }
 
-    $lines[] = "Method: $method";
-
-    if ($senderNumber !== '' && $senderNumber !== '--') {
-        $lines[] = "Number: $senderNumber";
-    }
-
-    $merchantNumber = telegram_bot_gateway_number($t['payment_method_id'] ?? '');
-    if ($merchantNumber !== '') {
-        $lines[] = "Merchant No: $merchantNumber";
-    }
-
-    $lines[] = "Customer: $name" . ($contact !== '' && $contact !== '--' ? " ($contact)" : '');
-
     if (!empty($t['transaction_product_name']) && $t['transaction_product_name'] !== '--') {
         $lines[] = "Product: " . $t['transaction_product_name'];
     }
@@ -399,18 +401,7 @@ function telegram_bot_notification_transaction_event($transaction_id, $event) {
         $lines[] = "Time: " . $t['created_at'];
     }
 
-    $siteUrl = telegram_bot_site_url();
-    if ($siteUrl !== '' && !empty($t['id'])) {
-        $lines[] = "Panel: $siteUrl/admin/view-transaction?ref=" . $t['id'];
-    }
-
     $message = implode("\n", $lines);
-
-    // Receipt uploaded by the customer, sent along with the details.
-    $receipt = '';
-    if ($verifyWay === 'slip' && $verifyId !== '' && $verifyId !== '--' && preg_match('#^https?://#i', $verifyId)) {
-        $receipt = $verifyId;
-    }
 
     send_telegram_bot_notification($message, $receipt, $settings);
 }
@@ -452,24 +443,21 @@ function telegram_bot_notification_invoice_admin_ipn($invoice_id) {
     
     $currency = !empty($i['i_currency']) ? $i['i_currency'] : '';
     $invoice_no = !empty($i['i_id']) ? $i['i_id'] : 'N/A';
-    $name = !empty($i['c_name']) ? $i['c_name'] : 'Unknown client';
+    $name = !empty($i['c_name']) ? $i['c_name'] : '';
     $contact = !empty($i['c_email_mobile']) ? $i['c_email_mobile'] : '';
     $dueDate = !empty($i['i_due_date']) ? $i['i_due_date'] : '';
+    $rawStatus = strtolower((string) ($i['i_status'] ?? ''));
 
     $lines = [
-        "Invoice $status",
-        "Invoice #$invoice_no",
+        telegram_bot_status_emoji($rawStatus) . " Invoice $status",
+        "ID: $invoice_no",
+        "Status: $status",
         "Amount: $amount $currency",
-        "Customer: $name" . ($contact !== '' && $contact !== '--' ? " ($contact)" : ''),
+        "Customer Account: " . telegram_bot_account_line('', $contact, $name),
     ];
 
     if ($dueDate !== '' && $dueDate !== '--') {
         $lines[] = "Due Date: $dueDate";
-    }
-
-    $siteUrl = telegram_bot_site_url();
-    if ($siteUrl !== '') {
-        $lines[] = "Pay now: $siteUrl/invoice/$invoice_no";
     }
 
     send_telegram_bot_notification(implode("\n", $lines));

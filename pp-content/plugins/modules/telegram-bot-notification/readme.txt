@@ -19,7 +19,8 @@ Connect the bot with a bot token and a chat ID. Create a bot with @BotFather, co
 * Transaction and invoice alerts sent to your Telegram chat
 * Alerts for a submitted payment (pending) and a completed payment, each switchable on or off
 * Optional alert for every new checkout, off by default since most checkouts are abandoned
-* Transaction alerts include the payment method, numbers, transaction ID, amount, fee, status and a link to the transaction
+* Transaction alerts include the PipraPay ID, status, amount, payment method, customer account, gateway transaction ID, product and time
+* Status emoji on every alert (new, pending, completed, failed, refunded)
 * Customer receipts are sent as a photo together with the transaction details
 * Works with users, groups, supergroups and channels
 * Enable or disable the alerts at any time
