@@ -110,6 +110,41 @@
             ];
         }
 
+        // "Don't close this page" notice, the Back to Website button and the automatic
+        // redirect, identical on every status page. With $ppId set, the button and the
+        // redirect post pp_id to the merchant using its return method.
+        function keypay_status_redirect($url, $returnType = 'GET', $ppId = '') {
+            $hasUrl = ($url !== '' && $url !== '--');
+            $target = keypay_status_back_url($url);
+            $method = strtoupper((string) $returnType) === 'POST' ? 'POST' : 'GET';
+?>
+        <div class="notice" role="status">
+            <i class="fas fa-circle-info"></i>
+            <span>Please don't close this page. You will be redirected to the website automatically. Closing it early may lose your payment status.</span>
+        </div>
+
+        <div class="actions">
+            <?php if ($hasUrl && $ppId !== ''): ?>
+            <form action="<?php echo htmlspecialchars($target); ?>" method="<?php echo $method; ?>" id="redirect-form">
+                <input type="hidden" name="pp_id" value="<?php echo htmlspecialchars($ppId); ?>">
+                <button type="submit" class="btn-main"><i class="fas fa-arrow-left"></i> Back to Website</button>
+            </form>
+            <?php else: ?>
+            <a href="<?php echo htmlspecialchars($target); ?>" class="btn-main" id="redirect-link"><i class="fas fa-arrow-left"></i> Back to Website</a>
+            <?php endif; ?>
+        </div>
+
+        <script>
+            setTimeout(function() {
+                var form = document.getElementById('redirect-form');
+                var link = document.getElementById('redirect-link');
+                if (form) form.submit();
+                else if (link) window.location.href = link.href;
+            }, 5000);
+        </script>
+<?php
+        }
+
         // Where "Back to Website" goes: the merchant URL if one was given, else this site.
         function keypay_status_back_url($url) {
             $url = (string) $url;
