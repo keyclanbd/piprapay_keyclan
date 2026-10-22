@@ -20,10 +20,26 @@
         exit();
     }
     
+    // One database connection per request. Callers still call close() when done, so
+    // the shared connection ignores it; PHP closes it when the request ends.
+    if (!class_exists('PPSharedConnection')) {
+        class PPSharedConnection extends mysqli {
+            #[\ReturnTypeWillChange]
+            public function close() {
+                return true;
+            }
+        }
+    }
+
     function connectDatabase() {
         global $db_host, $db_user, $db_pass, $db_name;
+        static $conn = null;
 
-        $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
+        if ($conn instanceof mysqli) {
+            return $conn;
+        }
+
+        $conn = new PPSharedConnection($db_host, $db_user, $db_pass, $db_name);
 
         if ($conn->connect_error) {
             error_log('Database connection failed: ' . $conn->connect_error);
@@ -67,12 +83,6 @@
         return false;
     }
 
-    // Secret for server-to-server calls (cron -> auto-update), derived from
-    // credentials only this installation knows.
-    function pp_internal_token($purpose) {
-        global $db_host, $db_user, $db_pass, $db_name, $db_prefix;
-        return hash_hmac('sha256', 'pp-internal|' . $purpose, $db_host . '|' . $db_user . '|' . $db_pass . '|' . $db_name . '|' . $db_prefix);
-    }
 
     // Admin list pages insert JSON values straight into HTML, so customer-supplied
     // text (names, numbers, transaction ids, SMS text) must arrive escaped.
@@ -1230,12 +1240,20 @@ function deleteData($tableName, $condition) {
         global $db_prefix;
         
         $slug = mysqli_real_escape_string($conn, $slug);
-    
-        $query = "SELECT plugin_dir, plugin_array FROM ".$db_prefix."plugins WHERE plugin_slug = '$slug'";
-        $result = mysqli_query($conn, $query);
-    
-        if ($result && mysqli_num_rows($result) > 0) {
-            $row = mysqli_fetch_assoc($result);
+
+        // The checkout asks for each gateway's settings several times per page, so the
+        // row is cached for the request; pp_set_plugin_setting() clears it.
+        $row = $GLOBALS['pp_plugin_setting_rows'][$slug] ?? null;
+        if ($row === null) {
+            $query = "SELECT plugin_dir, plugin_array FROM ".$db_prefix."plugins WHERE plugin_slug = '$slug'";
+            $result = mysqli_query($conn, $query);
+            if ($result && mysqli_num_rows($result) > 0) {
+                $row = mysqli_fetch_assoc($result);
+                $GLOBALS['pp_plugin_setting_rows'][$slug] = $row;
+            }
+        }
+
+        if ($row !== null) {
             $settings = json_decode($row['plugin_array'], true);
             if (!is_array($settings)) {
                 return [];
@@ -1262,6 +1280,8 @@ function deleteData($tableName, $condition) {
     function pp_set_plugin_setting($slug, $dataArray) {
         $conn = connectDatabase();
         global $db_prefix;
+
+        unset($GLOBALS['pp_plugin_setting_rows']);
 
         $slug = mysqli_real_escape_string($conn, $slug);
         $jsonData = mysqli_real_escape_string($conn, json_encode($dataArray));
