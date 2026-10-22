@@ -52,6 +52,8 @@
         .btn-main{border:none;background:linear-gradient(180deg,#6C63FF 0%,#5B52F5 100%);color:#fff}
         .btn-secondary{background:#fff;color:#6C63FF;border:1px solid #d6dcff}
         .note{color:#667085;font-size:13px;margin:12px 0 0;text-align:center}
+        .notice{display:flex;gap:10px;align-items:flex-start;border:1px solid #fde7b0;background:#fffaeb;color:#93370d;border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.5;margin-bottom:6px}
+        .notice i{margin-top:2px;color:#f79009}
         .footer{padding:16px 22px;border-top:1px solid #edf2f7;color:#667085;font-size:12px;text-align:center}
         @media (max-width: 520px){body{padding:0}.status-card{min-height:100vh;border-radius:0}}
     </style>

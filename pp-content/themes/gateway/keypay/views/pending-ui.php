@@ -14,39 +14,30 @@
         'Your payment is under review. Please wait for confirmation.',
         ['Method' => $summary['method'], 'Total' => $summary['total']]);
 ?>
+        <div class="notice" role="status">
+            <i class="fas fa-circle-info"></i>
+            <span>Please don't close this page. You will be redirected to the website automatically. Closing it early may lose your payment status.</span>
+        </div>
+
         <div class="actions">
-            <button type="button" class="btn-main" onclick="window.location.reload()">
-                <i class="fas fa-rotate"></i> Refresh Status
-            </button>
             <?php if ($hasRedirect): ?>
-            <form action="<?php echo htmlspecialchars($redirectUrl); ?>" method="<?php echo $returnType; ?>">
+            <form action="<?php echo htmlspecialchars($redirectUrl); ?>" method="<?php echo $returnType; ?>" id="redirect-form">
                 <input type="hidden" name="pp_id" value="<?php echo htmlspecialchars($transaction_details['response'][0]['pp_id'] ?? ''); ?>">
-                <button type="submit" class="btn-secondary"><i class="fas fa-arrow-left"></i> Back to Website</button>
+                <button type="submit" class="btn-main"><i class="fas fa-arrow-left"></i> Back to Website</button>
             </form>
             <?php else: ?>
-            <a href="<?php echo htmlspecialchars(keypay_status_back_url('')); ?>" class="btn-secondary"><i class="fas fa-arrow-left"></i> Back to Website</a>
+            <a href="<?php echo htmlspecialchars(keypay_status_back_url('')); ?>" class="btn-main" id="redirect-link"><i class="fas fa-arrow-left"></i> Back to Website</a>
             <?php endif; ?>
         </div>
 
         <script>
-            // Stay here and re-check: once the payment is approved this page becomes
-            // the success page, which sends the customer back with pp_id.
-            (function() {
-                var remaining = 15;
-                var msg = document.createElement('p');
-                msg.className = 'note';
-                document.querySelector('.actions').after(msg);
-
-                var tick = function() {
-                    msg.textContent = 'Checking status again in ' + remaining + ' seconds...';
-                    if (remaining-- <= 0) {
-                        window.location.reload();
-                        return;
-                    }
-                    setTimeout(tick, 1000);
-                };
-                tick();
-            })();
+            // Send the customer back to the website; the merchant receives pp_id and can show the pending order.
+            setTimeout(function() {
+                var form = document.getElementById('redirect-form');
+                var link = document.getElementById('redirect-link');
+                if (form) form.submit();
+                else if (link) window.location.href = link.href;
+            }, 5000);
         </script>
 <?php
     keypay_status_close();
