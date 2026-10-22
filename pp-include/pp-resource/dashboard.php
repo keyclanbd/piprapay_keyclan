@@ -45,13 +45,6 @@
                 <h1 class="page-header-title">Dashboard</h1>
               </div>
               <!-- End Col -->
-        
-              <div class="col-auto">
-                <a class="btn btn-primary" href="https://<?php echo $_SERVER['HTTP_HOST']?>/pp-auto-update">
-                  <i class="bi-arrow-clockwise me-1"></i> Check Updates
-                </a>
-              </div>
-              <!-- End Col -->
             </div>
             <!-- End Row -->
           </div>
