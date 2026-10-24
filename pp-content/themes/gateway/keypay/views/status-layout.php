@@ -133,14 +133,26 @@
             <a href="<?php echo htmlspecialchars($target); ?>" class="btn-main" id="redirect-link"><i class="fas fa-arrow-left"></i> Back to Website</a>
             <?php endif; ?>
         </div>
+        <p class="note" id="redirect-timer" aria-live="polite">Redirecting in 5 seconds...</p>
 
         <script>
-            setTimeout(function() {
-                var form = document.getElementById('redirect-form');
-                var link = document.getElementById('redirect-link');
-                if (form) form.submit();
-                else if (link) window.location.href = link.href;
-            }, 5000);
+            (function() {
+                var remaining = 5;
+                var timer = document.getElementById('redirect-timer');
+                var tick = setInterval(function() {
+                    remaining--;
+                    if (remaining > 0) {
+                        timer.textContent = 'Redirecting in ' + remaining + (remaining === 1 ? ' second...' : ' seconds...');
+                        return;
+                    }
+                    clearInterval(tick);
+                    timer.textContent = 'Redirecting...';
+                    var form = document.getElementById('redirect-form');
+                    var link = document.getElementById('redirect-link');
+                    if (form) form.submit();
+                    else if (link) window.location.href = link.href;
+                }, 1000);
+            })();
         </script>
 <?php
         }
