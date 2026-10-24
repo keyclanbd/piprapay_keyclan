@@ -856,9 +856,10 @@ function deleteData($tableName, $condition) {
         return is_dir($dir) && is_writable($dir) ? $dir : null;
     }
 
-    // Renders a payment QR server-side and caches it, so the browser never waits
-    // on a third-party QR API round-trip. Falls back to the remote URL if the
-    // directory is not writable or the remote fetch fails.
+    // Payment QR image URL. A cached QR is served from this site. Otherwise the page
+    // must not wait on the QR API (QRs include the amount, so most are new): the
+    // browser loads it from the API, and the image is cached after the response
+    // has been sent, for refreshes and return visits.
     function pp_qr_image_url($payload, $size = 300) {
         $payload = (string) $payload;
         $remote = 'https://api.qrserver.com/v1/create-qr-code/?size=' . (int) $size . 'x' . (int) $size . '&data=' . rawurlencode($payload);
@@ -872,23 +873,49 @@ function deleteData($tableName, $condition) {
             return pp_get_site_url() . '/pp-external/media/qr-cache/' . basename($file);
         }
 
-        $png = @file_get_contents($remote, false, stream_context_create([
-            'http' => ['timeout' => 8, 'header' => "User-Agent: PipraPay\r\n"],
-            'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
-        ]));
-
-        if ($png === false || strlen($png) < 100 || @getimagesizefromstring($png) === false) {
-            return $remote;
+        $GLOBALS['pp_qr_pending'][$file] = $remote;
+        if (empty($GLOBALS['pp_qr_shutdown_registered'])) {
+            $GLOBALS['pp_qr_shutdown_registered'] = true;
+            register_shutdown_function('pp_qr_cache_after_response');
         }
-
-        $tmp = $file . '.' . bin2hex(random_bytes(4)) . '.tmp';
-        if (@file_put_contents($tmp, $png, LOCK_EX) !== false) {
-            @rename($tmp, $file);
-            @chmod($file, 0644);
-            return pp_get_site_url() . '/pp-external/media/qr-cache/' . basename($file);
-        }
-        @unlink($tmp);
         return $remote;
+    }
+
+    // Runs after the page: hands the response to the customer first, then caches the
+    // QR images it used. Without a way to finish the response early it does nothing,
+    // so a page is never held up by the QR API.
+    function pp_qr_cache_after_response() {
+        if (empty($GLOBALS['pp_qr_pending'])) {
+            return;
+        }
+        if (function_exists('litespeed_finish_request')) {
+            litespeed_finish_request();
+        } elseif (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        } else {
+            return;
+        }
+        // Release the session lock so the customer's next page is not blocked meanwhile.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
+        foreach ($GLOBALS['pp_qr_pending'] as $file => $remote) {
+            $png = @file_get_contents($remote, false, stream_context_create([
+                'http' => ['timeout' => 8, 'header' => "User-Agent: PipraPay\r\n"],
+                'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
+            ]));
+            if ($png === false || strlen($png) < 100 || @getimagesizefromstring($png) === false) {
+                continue;
+            }
+            $tmp = $file . '.' . bin2hex(random_bytes(4)) . '.tmp';
+            if (@file_put_contents($tmp, $png, LOCK_EX) !== false) {
+                @rename($tmp, $file);
+                @chmod($file, 0644);
+            } else {
+                @unlink($tmp);
+            }
+        }
     }
         
     function uploadImage($file, $max_file_size) {
