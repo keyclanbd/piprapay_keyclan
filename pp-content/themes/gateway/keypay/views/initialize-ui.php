@@ -58,9 +58,19 @@
     <title>Secure Checkout - <?php echo htmlspecialchars($merchantName); ?></title>
     <?php if ($merchantLogo !== ''): ?><link rel="icon" href="<?php echo htmlspecialchars($merchantLogo); ?>"><?php endif; ?>
     <meta name="theme-color" content="#f2f5fb">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
+    <style>
+        /* The only parts of Bootstrap this page used (its stylesheet was 33 KB on another server). */
+        @media (prefers-reduced-motion:no-preference){:root{scroll-behavior:smooth}}
+        body{-webkit-text-size-adjust:100%;text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+        img,svg{vertical-align:middle}
+        button,input,select,textarea{font-family:inherit;font-size:inherit;line-height:inherit}
+        button,[type=button],[type=submit]{-webkit-appearance:button}
+        button:not(:disabled),[type=button]:not(:disabled),[type=submit]:not(:disabled){cursor:pointer}
+        .ms-2{margin-left:.5rem!important}
+    </style>
     <style>
         :root {
             --bg: #f2f5fb;
@@ -1050,7 +1060,6 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const tabs = document.querySelectorAll('.global-tab[data-tab]');
