@@ -3,10 +3,13 @@
         die('Direct access not allowed');
     }
 
-    $merchantLogo = isset($setting['response'][0]['favicon']) && $setting['response'][0]['favicon'] !== '--'
+    // Empty when no logo is set; the header then shows a letter badge, as on the result pages.
+    $merchantLogo = isset($setting['response'][0]['favicon']) && $setting['response'][0]['favicon'] !== '--' && $setting['response'][0]['favicon'] !== ''
         ? $setting['response'][0]['favicon']
-        : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=';
+        : '';
     $merchantName = $setting['response'][0]['site_name'] ?? 'PipraPay';
+    $brandName = 'KeyClan';
+    $brandInitial = strtoupper(substr($brandName, 0, 1));
     $currencyCode = strtoupper(trim($transaction_details['response'][0]['transaction_currency'] ?? 'USD'));
     $currencySymbolMap = [
         'BDT' => '৳',
@@ -53,7 +56,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Checkout - <?php echo htmlspecialchars($merchantName); ?></title>
-    <link rel="icon" type="image/x-icon" href="<?php echo htmlspecialchars($merchantLogo); ?>">
+    <?php if ($merchantLogo !== ''): ?><link rel="icon" href="<?php echo htmlspecialchars($merchantLogo); ?>"><?php endif; ?>
     <meta name="theme-color" content="#f2f5fb">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -275,6 +278,22 @@
             object-fit: contain;
             border-radius: 8px;
             margin-top: 1px;
+        }
+
+        /* Placeholder when the logo is missing or fails to load (same as the result pages). */
+        .merchant-initial {
+            width: 34px;
+            height: 34px;
+            flex: 0 0 auto;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #efeeff;
+            color: #6C63FF;
+            font-weight: 800;
+            font-size: 16px;
+            line-height: 1;
         }
 
         .merchant-name {
@@ -862,8 +881,13 @@
                         <div class="brand-stack">
                             <div class="merchant-block">
                                 <div class="merchant-head">
-                                    <img src="<?php echo htmlspecialchars($merchantLogo); ?>" alt="<?php echo htmlspecialchars($merchantName); ?>" class="merchant-logo">
-                                    <p class="merchant-name">KeyClan</p>
+                                    <?php if ($merchantLogo !== ''): ?>
+                                    <img src="<?php echo htmlspecialchars($merchantLogo); ?>" alt="<?php echo htmlspecialchars($merchantName); ?>" class="merchant-logo" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                                    <div class="merchant-initial" style="display:none" aria-hidden="true"><?php echo htmlspecialchars($brandInitial); ?></div>
+                                    <?php else: ?>
+                                    <div class="merchant-initial" aria-hidden="true"><?php echo htmlspecialchars($brandInitial); ?></div>
+                                    <?php endif; ?>
+                                    <p class="merchant-name"><?php echo htmlspecialchars($brandName); ?></p>
                                 </div>
                             </div>
                         </div>
