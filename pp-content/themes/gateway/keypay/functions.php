@@ -20,21 +20,8 @@
                 $raw_method = $_GET['method'];
                 $clean_method = explode('/', $raw_method)[0];
                 
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    
-                }else{
-                    echo '
-                    <style>
-                        .list-unstyled li {
-                            height: auto !important;
-                            min-height: 40px;
-                            font-size: 15px;
-                            align-items: center;
-                        }
-                    </style>';
-                }
-                
-                payment_gateway_include($clean_method, $payment_id);
+                // Styles the gateway list items; placed inside the gateway page's <head> so <!DOCTYPE> stays first.
+                payment_gateway_include_with_css($clean_method, $payment_id, '.list-unstyled li{height:auto !important;min-height:40px;font-size:15px;align-items:center}');
             }else{
                 $viewFile = __DIR__ . '/views/'.$transaction_details['response'][0]['transaction_status'].'-ui.php';
         

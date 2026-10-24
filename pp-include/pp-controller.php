@@ -1413,6 +1413,29 @@ function deleteData($tableName, $condition) {
         }
     }
 
+    // Shows a gateway page with extra theme CSS placed inside its <head>. Printing the
+    // CSS before the page put it ahead of <!DOCTYPE>, which switched every gateway
+    // page into quirks mode. A page that ends with exit() is still sent, unstyled.
+    function payment_gateway_include_with_css($slug, $payment_id, $css) {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+            payment_gateway_include($slug, $payment_id);
+            return;
+        }
+
+        ob_start();
+        payment_gateway_include($slug, $payment_id);
+        $html = ob_get_clean();
+
+        $style = '<style>' . $css . '</style>';
+        if (preg_match('/<head\b[^>]*>/i', $html, $m, PREG_OFFSET_CAPTURE)) {
+            $at = $m[0][1] + strlen($m[0][0]);
+            $html = substr($html, 0, $at) . $style . substr($html, $at);
+        } else {
+            $html = $style . $html;
+        }
+        echo $html;
+    }
+
     function payment_gateway_include($slug, $payment_id) {
         $conn = connectDatabase();
         global $db_prefix;
