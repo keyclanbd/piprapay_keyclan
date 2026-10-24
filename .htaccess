@@ -57,3 +57,21 @@ RedirectMatch 404 /\.vscode
 <IfModule mod_rewrite.c>
     RewriteRule ^(?:pp-external/media|pp-content/uploads)/.*\.(?:php|phtml|php[3-8])$ - [F,NC,L]
 </IfModule>
+
+# Compress text responses (pages, CSS, JS, JSON, SVG).
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript text/javascript application/json image/svg+xml
+</IfModule>
+
+# Let browsers keep images and fonts for a week. CSS and JS are left out on purpose:
+# admin assets are not versioned, so caching them could serve old code after a deploy.
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/png "access plus 7 days"
+    ExpiresByType image/jpeg "access plus 7 days"
+    ExpiresByType image/webp "access plus 7 days"
+    ExpiresByType image/svg+xml "access plus 7 days"
+    ExpiresByType image/x-icon "access plus 7 days"
+    ExpiresByType font/woff2 "access plus 30 days"
+    ExpiresByType font/woff "access plus 30 days"
+</IfModule>
