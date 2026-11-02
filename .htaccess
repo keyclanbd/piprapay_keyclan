@@ -1,5 +1,9 @@
 RewriteEngine On
 
+# No directory listings anywhere. Uploads in pp-external/media are only safe because
+# their random names can't be guessed, and a listing hands every name out.
+Options -Indexes
+
 RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 
