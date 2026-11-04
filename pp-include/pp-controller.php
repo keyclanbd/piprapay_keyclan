@@ -1193,6 +1193,13 @@ function deleteData($tableName, $condition) {
         return [];
     }
     
+    // Images are cached by browsers for a week, so icon URLs carry the file's change time;
+    // replacing an icon gives it a new URL and it shows at once.
+    function pp_asset_version($path) {
+        $mtime = @filemtime($path);
+        return $mtime ? '?v='.$mtime : '';
+    }
+
     function pp_get_plugin_setting($slug, $resolveGatewayCurrency = true) {
         $conn = connectDatabase();
         global $db_prefix;
@@ -1976,7 +1983,7 @@ function deleteData($tableName, $condition) {
         return [
             'plugin_name' => $plugin_setting['display_name'] ?? $plugin['plugin_name'] ?? $plugin['plugin_slug'],
             'plugin_slug' => $plugin['plugin_slug'],
-            'plugin_logo' => 'https://'.$_SERVER['HTTP_HOST'].'/pp-content/plugins/'.$plugin['plugin_dir'].'/'.$plugin['plugin_slug'].'/assets/icon.png',
+            'plugin_logo' => 'https://'.$_SERVER['HTTP_HOST'].'/pp-content/plugins/'.$plugin['plugin_dir'].'/'.$plugin['plugin_slug'].'/assets/icon.png'.pp_asset_version($logoPath),
             'fixed_charge' => safeNumber($plugin_setting['fixed_charge'] ?? 0),
             'percent_charge' => safeNumber($plugin_setting['percent_charge'] ?? 0),
             'currency' => $payableCurrency ?: $gatewayCurrency,

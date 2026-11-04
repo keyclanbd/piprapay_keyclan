@@ -185,7 +185,7 @@
                                                             <div class="card-body">
                                                                 <div class="d-flex align-items-start mb-3">
                                                                     <div class="plugin-icon bg-primary bg-opacity-10 text-primary me-3">
-                                                                        <img src="https://<?php echo $_SERVER['HTTP_HOST']?>/pp-content/themes/<?php echo $mainFolder.'/'.$themeFolder?>/assets/icon.png" alt="Image Description">
+                                                                        <img src="https://<?php echo $_SERVER['HTTP_HOST']?>/pp-content/themes/<?php echo $mainFolder.'/'.$themeFolder?>/assets/icon.png<?php echo pp_asset_version(__DIR__.'/../../pp-content/themes/'.$mainFolder.'/'.$themeFolder.'/assets/icon.png')?>" alt="Image Description">
                                                                     </div>
                                                                     <div class="flex-grow-1">
                                                                         <h5 class="mb-1"><?php echo htmlspecialchars($themeInfo['Theme Name'] ?? '')?></h5>
