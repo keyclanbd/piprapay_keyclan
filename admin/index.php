@@ -478,23 +478,6 @@
                 <?php
                     }
                 ?>
-
-                <span class="dropdown-header mt-4">Documentation</span>
-                <small class="bi-three-dots nav-subtitle-replacer"></small>
-    
-                <div class="nav-item">
-                  <a class="nav-link " href="https://play.google.com/store/apps/details?id=com.qube.piprapay" target="blank" data-placement="left">
-                    <i class="bi-android nav-icon"></i>
-                    <span class="nav-link-title">Android Payment Panel</span>
-                  </a>
-                </div>
-    
-                <div class="nav-item">
-                  <a class="nav-link " href="https://piprapay.readme.io/" target="blank" data-placement="left">
-                    <i class="bi-book nav-icon"></i>
-                    <span class="nav-link-title">Documentation</span>
-                  </a>
-                </div>
           </div>
 
         </div>
