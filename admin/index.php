@@ -239,10 +239,18 @@
         <ul class="navbar-nav">
           <li class="nav-item">
             <!-- Account -->
+            <?php
+              // No profile photos exist, so the avatar is the first letter of the admin's name (username as fallback).
+              $accountInitialSource = trim((string) ($global_user_response['response'][0]['name'] ?? ''));
+              if ($accountInitialSource === '') {
+                  $accountInitialSource = trim((string) ($global_user_response['response'][0]['username'] ?? ''));
+              }
+              $accountInitial = $accountInitialSource !== '' ? mb_strtoupper(mb_substr($accountInitialSource, 0, 1, 'UTF-8'), 'UTF-8') : '?';
+            ?>
             <div class="dropdown">
               <a class="navbar-dropdown-account-wrapper" href="javascript:;" id="accountNavbarDropdown" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside" data-bs-dropdown-animation>
-                <div class="avatar avatar-sm avatar-circle">
-                  <img class="avatar-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Image Description">
+                <div class="avatar avatar-sm avatar-soft-primary avatar-circle">
+                  <span class="avatar-initials"><?php echo htmlspecialchars($accountInitial); ?></span>
                   <span class="avatar-status avatar-sm-status avatar-status-success"></span>
                 </div>
               </a>
@@ -250,8 +258,8 @@
               <div class="dropdown-menu dropdown-menu-end navbar-dropdown-menu navbar-dropdown-menu-borderless navbar-dropdown-account" aria-labelledby="accountNavbarDropdown" style="width: 16rem;">
                 <div class="dropdown-item-text">
                   <div class="d-flex align-items-center">
-                    <div class="avatar avatar-sm avatar-circle">
-                      <img class="avatar-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgDTD2qgAAAAASUVORK5CYII=" alt="Image Description">
+                    <div class="avatar avatar-sm avatar-soft-primary avatar-circle">
+                      <span class="avatar-initials"><?php echo htmlspecialchars($accountInitial); ?></span>
                     </div>
                     <div class="flex-grow-1 ms-3">
                       <h5 class="mb-0"><?php echo $global_user_response['response'][0]['name']?></h5>
