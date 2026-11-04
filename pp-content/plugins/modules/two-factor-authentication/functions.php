@@ -7,52 +7,63 @@ if (!defined('pp_allowed_access')) {
 add_action('pp_admin_initialize', 'two_factor_authentication_initialize');
 
 if(isset($_POST['two-factor-authentication-action'])){
-    $secret_key = escape_string($_POST['secret_key']);
-    $auth_code = escape_string($_POST['auth_code']);
-    $auth_status = escape_string($_POST['auth_status']);
-    
-    if($secret_key == "" || $auth_code == "" || $auth_status == ""){
+    // This file is loaded on every page that fires a hook, so the save checks login and CSRF itself
+    // (it runs inside pp_trigger_hook(), hence $GLOBALS).
+    if (empty($GLOBALS['global_user_login'])) {
+        echo json_encode(['status' => "false", 'message' => 'Unauthorized request']);
+        exit();
+    }
+    if (!validateCsrfToken($_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) {
+        echo json_encode(['status' => "false", 'message' => 'Invalid security token. Please refresh the page and try again.']);
+        exit();
+    }
+    if (($GLOBALS['mode'] ?? '') == "demo") {
+        echo json_encode(['status' => "false", 'message' => 'Error: Demo mode is active']);
+        exit();
+    }
+
+    $plugin_slug = 'two-factor-authentication';
+    $current = pp_get_plugin_setting($plugin_slug);
+
+    // While 2FA is on, only a session that already passed it may change it; a password alone is not enough.
+    if (($current['auth_status'] ?? '') == "enable") {
+        $currentProof = two_factor_authentication_session_proof((string) ($current['secret_key'] ?? ''));
+        if ($currentProof === '' || !hash_equals($currentProof, (string) ($_COOKIE['pp_two_factor_authentication'] ?? ''))) {
+            echo json_encode(['status' => "false", 'message' => 'Unauthorized request']);
+            exit();
+        }
+    }
+
+    $secret_key = escape_string($_POST['secret_key'] ?? '');
+    $auth_code = escape_string($_POST['auth_code'] ?? '');
+    $auth_status = escape_string($_POST['auth_status'] ?? '');
+
+    if($secret_key == "" || $auth_code == "" || !in_array($auth_status, ['enable', 'disable'], true)){
         echo json_encode(['status' => "false", 'message' => 'Enter all info!']);
     }else{
         require __DIR__ . '/vendor-two-factor-authentication/autoload.php'; // If using Composer
-        
+
         $ga = new PHPGangsta_GoogleAuthenticator();
-    
+
         $isValid = $ga->verifyCode($secret_key, $auth_code, 2);
-        
+
         if ($isValid) {
-            $targetUrl = pp_get_site_url().'/admin/dashboard'; // change to your actual endpoint
-            
-            // Data from form (you may fetch this dynamically)
-            $data = [
-                'action' => 'plugin_update-submit',
-                'plugin_slug' => 'two-factor-authentication',
-                'secret_key' => $secret_key, // the generated 2FA secret
-                'auth_code' => '', // the 2FA code user inputs
-                'auth_status' => $auth_status, // or 'disable'
-            ];
-            
-            // Initialize cURL
-            $ch = curl_init($targetUrl);
-            
-            // Set cURL options
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data)); // form-style POST
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-            
-            // Execute and capture response
-            $response = curl_exec($ch);
-            
-            curl_close($ch);
-            
-            $response = json_decode($response, true);
-            
-            if($response['status'] == "true"){
+            // Saved directly: the old server-to-server POST to /admin/dashboard had no session or CSRF token, so it was always rejected.
+            $saved = pp_set_plugin_setting($plugin_slug, [
+                'secret_key' => $secret_key,
+                'auth_code' => '',
+                'auth_status' => $auth_status,
+            ]);
+
+            if($saved){
+                // The admin just proved the code, so don't ask for it again on the next page.
+                $proof = two_factor_authentication_session_proof($secret_key);
+                if ($auth_status == "enable" && $proof !== '') {
+                    setsCookie('pp_two_factor_authentication', $proof);
+                }
                 echo json_encode(['status' => "true", 'message' => 'Code is valid! Authentication successful.']);
             }else{
-                echo json_encode(['status' => "false", 'message' => $response['message']]);
+                echo json_encode(['status' => "false", 'message' => 'Failed to save settings.']);
             }
         } else {
             echo json_encode(['status' => "false", 'message' => 'Invalid code. Try again.']);
