@@ -60,6 +60,9 @@
         <div class="page-header">
           <div class="row align-items-end">
             <div class="col-sm mb-2 mb-sm-0">
+              <a class="btn btn-white btn-sm mb-2" href="javascript:void(0)" onclick="load_content('Transaction','transaction','nav-btn-transaction')">
+                <i class="bi-arrow-left"></i> Back to Transactions
+              </a>
               <h1 class="page-header-title">View Transaction</h1>
             </div>
             <!-- End Col -->
