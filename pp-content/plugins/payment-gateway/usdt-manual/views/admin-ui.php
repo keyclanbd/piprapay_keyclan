@@ -133,8 +133,8 @@
                 ?>
                 <div class="<?php echo $key === $last_key ? '' : 'border-bottom pb-4 mb-4'; ?>" data-usdt-wallet="<?php echo $key; ?>">
                   <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h3 class="h5 mb-0">
-                      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:<?php echo $network['color']; ?>"></span>
+                    <h3 class="h5 mb-0 d-flex align-items-center gap-2">
+                      <?php echo $network['icon']; ?>
                       <?php echo htmlspecialchars($network['name']); ?>
                     </h3>
                     <div class="form-check form-switch mb-0">

@@ -3,7 +3,7 @@
         return [
             'trc20' => [
                 'name' => 'TRON (TRC20)',
-                'color' => '#E5403B',
+                'icon' => '<svg class="net-icon" width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#EF0027"/><path fill="#FFF" d="M21.932 9.913 7.5 7.257l7.595 19.112 10.583-12.894-3.746-3.562zm-.232 1.17 2.208 2.099-6.038 1.093 3.83-3.192zm-5.142 2.973-6.364-5.28 10.402 1.914-4.038 3.366zm-.453.934-1.038 8.58L9.472 9.487l6.633 5.502zm.96.455 6.687-1.21-7.67 9.343.983-8.133z"/></svg>',
                 'address_pattern' => '^T[1-9A-HJ-NP-Za-km-z]{33}$',
                 'address_rule' => 'TRON addresses start with T and have 34 characters.',
                 'explorer' => 'Tronscan',
@@ -11,7 +11,7 @@
             ],
             'bep20' => [
                 'name' => 'BSC (BEP20)',
-                'color' => '#D9A400',
+                'icon' => '<svg class="net-icon" width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#F3BA2F"/><path fill="#FFF" d="M12.116 14.404 16 10.52l3.886 3.886 2.26-2.26L16 6l-6.144 6.144 2.26 2.26zM6 16l2.26-2.26L10.52 16l-2.26 2.26L6 16zm6.116 1.596L16 21.48l3.886-3.886 2.26 2.259L16 26l-6.144-6.144-.003-.003 2.263-2.257zM21.48 16l2.26-2.26L26 16l-2.26 2.26L21.48 16zm-3.188-.002h.002V16L16 18.294l-2.291-2.29-.004-.004.004-.003.401-.402.195-.195L16 13.706l2.293 2.293z"/></svg>',
                 'address_pattern' => '^0x[a-fA-F0-9]{40}$',
                 'address_rule' => 'BSC addresses start with 0x and have 42 characters.',
                 'explorer' => 'BscScan',
@@ -19,7 +19,7 @@
             ],
             'erc20' => [
                 'name' => 'Ethereum (ERC20)',
-                'color' => '#5B6EE1',
+                'icon' => '<svg class="net-icon" width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#627EEA"/><g fill="#FFF"><path fill-opacity=".602" d="M16.498 4v8.87l7.497 3.35z"/><path d="M16.498 4 9 16.22l7.498-3.35z"/><path fill-opacity=".602" d="M16.498 21.968v6.027L24 17.616z"/><path d="M16.498 27.995v-6.028L9 17.616z"/><path fill-opacity=".2" d="m16.498 20.573 7.497-4.353-7.497-3.348z"/><path fill-opacity=".602" d="m9 16.22 7.498 4.353v-7.701z"/></g></svg>',
                 'address_pattern' => '^0x[a-fA-F0-9]{40}$',
                 'address_rule' => 'Ethereum addresses start with 0x and have 42 characters.',
                 'explorer' => 'Etherscan',
@@ -54,7 +54,6 @@
             if (($wallet['enabled'] ?? '') === 'enable' && usdt_manual_address_is_valid($key, $wallet['address'] ?? '')) {
                 $active[$key] = [
                     'name' => $network['name'],
-                    'color' => $network['color'],
                     'address' => $wallet['address'],
                     'qr_code' => (string) ($wallet['qr_code'] ?? ''),
                 ];

@@ -65,49 +65,48 @@
 *{box-sizing:border-box}
 body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 button,input{font:inherit}
-.page{width:min(620px,calc(100% - 32px));margin:34px auto 48px;background:#fff;border-radius:24px;padding:0 20px 24px;box-shadow:0 14px 40px rgba(26,26,26,.06)}
-.top{display:grid;grid-template-columns:70px 1fr 70px;align-items:center;padding:18px 0}
-.top img{height:48px;justify-self:center}
+.page{width:min(620px,calc(100% - 32px));margin:16px auto;background:#fff;border-radius:24px;padding:0 20px 14px;box-shadow:0 14px 40px rgba(26,26,26,.06)}
+.top{display:grid;grid-template-columns:70px 1fr 70px;align-items:center;padding:10px 0}
+.top img{height:34px;justify-self:center}
 .back{border:0;background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:7px;font-weight:600;font-size:14px;padding:0}
 .back i{font-size:18px}
-.amount{padding:20px 26px;background:radial-gradient(circle at 90% 40%,rgba(45,212,191,.28),transparent 50%),linear-gradient(95deg,#0B1F2A,#123845);color:#fff;border-radius:16px 16px 0 0}
-.eyebrow{font-size:13px;font-weight:600;opacity:.85}
-.price{font-size:34px;font-weight:800;letter-spacing:-1.2px;margin-top:4px}
-.main{border:1px solid var(--line);border-top:0;border-radius:0 0 16px 16px;padding:24px 26px 26px;display:grid;gap:20px}
-.label{display:block;font-size:13px;font-weight:700;margin-bottom:9px}
+.amount{padding:12px 22px;background:radial-gradient(circle at 90% 40%,rgba(45,212,191,.28),transparent 50%),linear-gradient(95deg,#0B1F2A,#123845);color:#fff;border-radius:16px 16px 0 0}
+.eyebrow{font-size:12px;font-weight:600;opacity:.85}
+.price{font-size:26px;font-weight:800;letter-spacing:-.8px;margin-top:1px}
+.main{border:1px solid var(--line);border-top:0;border-radius:0 0 16px 16px;padding:14px 22px 16px;display:grid;gap:12px}
+.label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
 .opt{font-weight:500;color:var(--muted)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--line2);background:#fff;color:var(--ink);border-radius:11px;padding:9px 13px;font-size:13px;font-weight:600;cursor:pointer}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--line2);background:#fff;color:var(--ink);border-radius:11px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}
 .chip:hover{border-color:var(--accent)}
 .chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent2)}
-.dot{width:9px;height:9px;border-radius:50%;flex:none}
-.warn{display:flex;gap:9px;background:#FFF7E6;border:1px solid #F5DFA8;color:#8A5A00;font-size:13px;line-height:1.45;border-radius:11px;padding:11px 13px}
+.net-icon{flex:none;display:block}
+.warn{display:flex;gap:9px;background:#FFF7E6;border:1px solid #F5DFA8;color:#8A5A00;font-size:13px;line-height:1.4;border-radius:11px;padding:8px 12px}
 .warn i{margin-top:3px}
-.pay{display:grid;gap:20px;text-align:center}
+.pay{display:grid;gap:10px;text-align:center}
 .qr-frame{position:relative;width:158px;height:158px;margin:auto;padding:4px;background:linear-gradient(var(--accent),var(--accent)) top left/18px 3px no-repeat,linear-gradient(var(--accent),var(--accent)) top left/3px 18px no-repeat,linear-gradient(var(--accent),var(--accent)) top right/18px 3px no-repeat,linear-gradient(var(--accent),var(--accent)) top right/3px 18px no-repeat,linear-gradient(var(--accent),var(--accent)) bottom left/18px 3px no-repeat,linear-gradient(var(--accent),var(--accent)) bottom left/3px 18px no-repeat,linear-gradient(var(--accent),var(--accent)) bottom right/18px 3px no-repeat,linear-gradient(var(--accent),var(--accent)) bottom right/3px 18px no-repeat}
 .qr-frame img{display:block;width:150px;height:150px;object-fit:contain;background:#fff;padding:5px}
-.qr-tag{font-size:11px;color:var(--muted);margin-top:8px}
-.addr-box{display:flex;align-items:center;gap:8px;background:#FCFCFD;border:1px solid var(--line);border-radius:12px;padding:8px 8px 8px 14px;text-align:left}
-.addr{flex:1;min-width:0;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:14.5px;line-height:1.6;overflow-wrap:anywhere;color:var(--muted)}
+.addr-box{display:flex;align-items:center;gap:8px;background:#FCFCFD;border:1px solid var(--line);border-radius:12px;padding:3px 4px 3px 12px;text-align:left}
+.addr{flex:1;min-width:0;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere;color:var(--muted)}
 .addr b{color:var(--ink);font-weight:700}
 .copy{flex:none;width:36px;height:36px;display:grid;place-items:center;border:0;background:transparent;color:var(--accent2);border-radius:9px;cursor:pointer;font-size:16px}
 .copy:hover{background:var(--accent-soft)}
-.hint{font-size:12px;color:var(--muted);line-height:1.5;margin:9px 0 0}
-.form{border-top:1px solid var(--line);padding-top:20px;display:grid;gap:16px}
-.input{width:100%;height:50px;border:1px solid var(--line2);border-radius:14px;padding:0 15px;background:#FCFCFD;outline:0;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:13px;color:var(--ink)}
+.hint{font-size:12px;color:var(--muted);line-height:1.4;margin:5px 0 0}
+.form{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:10px}
+.input{width:100%;height:42px;border:1px solid var(--line2);border-radius:12px;padding:0 15px;background:#FCFCFD;outline:0;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:13px;color:var(--ink)}
 .input:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(13,148,136,.14)}
-.upload{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center;padding:13px 15px;border:1.5px dashed #9FD8D2;border-radius:14px;background:#FAFDFC;cursor:pointer}
+.upload{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 14px;align-items:center;padding:7px 12px;border:1.5px dashed #9FD8D2;border-radius:12px;background:#FAFDFC;cursor:pointer}
 .upload:hover{border-color:var(--accent)}
 .upload-title{font-size:13px;font-weight:700;min-width:0}
 .upload-sub{grid-column:1;font-size:11px;color:var(--muted);overflow-wrap:anywhere}
-.choose{grid-column:2;grid-row:1 / span 2;background:#fff;border:1px solid #9FD8D2;color:var(--accent2);padding:8px 13px;border-radius:9px;font-size:12px;font-weight:700}
+.choose{grid-column:2;grid-row:1 / span 2;background:#fff;border:1px solid #9FD8D2;color:var(--accent2);padding:6px 12px;border-radius:9px;font-size:12px;font-weight:700}
 .payment-file{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .response-message{padding:11px 13px;border-radius:10px;background:#fff1f1;color:#b52e38;font-size:13px;font-weight:600}
-.btn-pay{width:100%;padding:15px 20px;border:0;border-radius:16px;background:linear-gradient(100deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 10px 20px rgba(13,148,136,.22)}
+.btn-pay{width:100%;padding:12px 20px;border:0;border-radius:14px;background:linear-gradient(100deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 10px 20px rgba(13,148,136,.22)}
 .btn-pay:disabled{opacity:.7;cursor:default}
-.footer{text-align:center;color:#9a9da3;font-size:12px;margin-top:20px}
+.footer{text-align:center;color:#9a9da3;font-size:12px;margin-top:10px}
 [hidden]{display:none!important}
-@media(max-width:600px){.page{width:calc(100% - 16px);margin:10px auto 24px;padding:0 14px 18px}.main{padding:18px 16px}.amount{padding:16px 18px}.price{font-size:28px}.top{grid-template-columns:60px 1fr 60px}}
+@media(max-width:600px){.page{width:calc(100% - 16px);margin:8px auto;padding:0 12px 12px}.main{padding:12px 14px 14px}.amount{padding:10px 16px}.top{grid-template-columns:60px 1fr 60px}}
 </style></head>
 <body><main class="page">
 <header class="top"><button class="back" type="button" onclick="location.href='<?php echo htmlspecialchars($payment_link, ENT_QUOTES); ?>'" aria-label="Back"><i class="fa-solid fa-arrow-left"></i><span>Back</span></button><img src="<?php echo htmlspecialchars($logo, ENT_QUOTES); ?>" alt="USDT"><span aria-hidden="true"></span></header>
@@ -120,21 +119,20 @@ button,input{font:inherit}
         <span class="label">Network</span>
         <div class="chips">
             <?php foreach ($wallets as $key => $wallet): ?>
-                <button class="chip" type="button" data-network="<?php echo $key; ?>" aria-pressed="<?php echo $wallet === $first ? 'true' : 'false'; ?>"><span class="dot" style="background:<?php echo $wallet['color']; ?>"></span><?php echo htmlspecialchars($wallet['name']); ?></button>
+                <button class="chip" type="button" data-network="<?php echo $key; ?>" aria-pressed="<?php echo $wallet === $first ? 'true' : 'false'; ?>"><?php echo usdt_manual_networks()[$key]['icon']; ?><?php echo htmlspecialchars($wallet['name']); ?></button>
             <?php endforeach; ?>
         </div>
     </div>
-    <div class="warn"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><span>Send only <strong>USDT</strong> on <strong id="warn-network"></strong>. Funds sent on any other network can't be recovered.</span></div>
+    <div class="warn"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><span>Send only <strong>USDT</strong> on <strong id="warn-network"></strong>. Funds sent on other networks will be lost.</span></div>
     <div class="pay">
         <div id="qr-block">
             <span class="label">Scan to pay</span>
             <div class="qr-frame"><img id="qr-image" alt="Payment QR code" fetchpriority="high"></div>
-            <div class="qr-tag" id="qr-tag"></div>
         </div>
         <div>
             <span class="label">Wallet address</span>
             <div class="addr-box"><div class="addr" id="address"></div><button class="copy" id="copy-address" type="button" aria-label="Copy address" title="Copy address"><i class="fa-regular fa-copy"></i></button></div>
-            <p class="hint">Check the first and last 6 characters after you paste. Your wallet's network fee is extra, so <?php echo $amount; ?> USDT must arrive in full.</p>
+            <p class="hint">Check the first and last 6 characters. Send <?php echo $amount; ?> USDT plus your network fee.</p>
         </div>
     </div>
     <div class="form">
@@ -187,7 +185,6 @@ button,input{font:inherit}
         document.getElementById('qr-block').hidden = !wallet.qr_code;
         if (wallet.qr_code) {
             document.getElementById('qr-image').src = wallet.qr_code;
-            document.getElementById('qr-tag').textContent = 'USDT · ' + wallet.name;
         }
         addressBox.textContent = '';
         var head = document.createElement('b');
