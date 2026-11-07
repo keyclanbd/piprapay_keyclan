@@ -1266,6 +1266,32 @@ function deleteData($tableName, $condition) {
         return $result;
     }
     
+    // Saving replaces all of a gateway's settings, and its form only sends a QR when a new
+    // file is chosen, so no file keeps the current QR. A file that can't be used is an error.
+    function pp_gateway_qr_after_save($plugin_slug, $current_qr, $file) {
+        if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            return ['status' => true, 'qr_code' => $current_qr];
+        }
+        $rejected = ['status' => false, 'message' => 'Settings were not saved. The QR code must be a PNG, JPG or WEBP image under 5MB.'];
+        if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > 5 * 1024 * 1024) {
+            return $rejected;
+        }
+        $extensions = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'];
+        $extension = $extensions[mime_content_type($file['tmp_name'])] ?? null;
+        if ($extension === null) {
+            return $rejected;
+        }
+        $uploadDir = __DIR__ . '/../pp-content/uploads/gateway-assets/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+        $filename = preg_replace('/[^A-Za-z0-9_-]/', '', (string) $plugin_slug) . '-qr-' . bin2hex(random_bytes(8)) . '.' . $extension;
+        if (!move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) {
+            return ['status' => false, 'message' => 'Settings were not saved. The QR code could not be stored. Please try again.'];
+        }
+        return ['status' => true, 'qr_code' => pp_get_site_url() . '/pp-content/uploads/gateway-assets/' . $filename];
+    }
+
     function pp_get_theme_setting($slug) {
         $conn = connectDatabase();
         global $db_prefix;

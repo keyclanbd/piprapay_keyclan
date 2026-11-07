@@ -55,6 +55,12 @@
             echo 'System is under maintenance. Please try again later.';
             exit();
         }
+
+        $usdt_manual_helpers = __DIR__.'/../../pp-content/plugins/payment-gateway/usdt-manual/usdt-manual-helpers.php';
+        $is_usdt_manual = ($response_transaction_checker['response'][0]['payment_method_id'] ?? '') === 'usdt-manual' && is_file($usdt_manual_helpers);
+        if ($is_usdt_manual) {
+            require_once $usdt_manual_helpers;
+        }
 ?>
         <!-- Page Header -->
         <div class="page-header">
@@ -75,7 +81,13 @@
                   <a class="btn btn-primary btn-sm mb-2 mb-sm-0 me-2 btn-bulk-action-approved" href="javascript:void(0)" onclick="bulk_action('btn-bulk-action-approved', 'approved')">
                     <i class="bi-check-circle"></i> Approved
                   </a>
-                  
+
+                  <?php if ($is_usdt_manual && ($response_transaction_checker['response'][0]['transaction_status'] ?? '') === 'pending') { ?>
+                  <a class="btn btn-outline-danger btn-sm mb-2 mb-sm-0 me-2 btn-bulk-action-reject" href="javascript:void(0)" onclick="bulk_action('btn-bulk-action-reject', 'reject')">
+                    <i class="bi-x-circle"></i> Reject
+                  </a>
+                  <?php } ?>
+
                   <a class="btn btn-warning btn-sm mb-2 mb-sm-0 me-2 btn-bulk-action-refund" href="javascript:void(0)" onclick="bulk_action('btn-bulk-action-refund', 'refund')">
                     <i class="bi-arrow-90deg-left"></i> Refund
                   </a>
@@ -179,6 +191,7 @@
                 <div class="card-body">
                     <div class="tab-content">
                       <div class="tab-pane fade show active" id="nav-one-transaction-details" role="tabpanel" aria-labelledby="nav-one-transaction-details-tab">
+                          <?php if ($is_usdt_manual) { usdt_manual_render_review($response_transaction_checker['response'][0]); } ?>
                           <div class="card">
                             <div class="card-header">
                                 <h2 class="card-title h4">Transaction Information</h2>
@@ -196,11 +209,13 @@
                                     <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['transaction_currency'] ?? ''), ENT_QUOTES)?></div>
                                   </div>
                                   
+                                  <?php if (!$is_usdt_manual) { ?>
                                   <div class="col-sm-4 mb-3">
                                     <label class="form-label fw-medium text-dark">Sender</label>
                                     <div class="fw-bold text-dark"><?php echo htmlspecialchars((string) ($response_transaction_checker['response'][0]['payment_sender_number'] ?? ''), ENT_QUOTES)?></div>
                                   </div>
-                                  
+                                  <?php } ?>
+
                                   <?php
                                       if($response_transaction_checker['response'][0]['payment_verify_way'] == "slip"){
                                   ?>
@@ -243,7 +258,7 @@
                                                 load_transaction_slip();
                                             </script>
                                   <?php
-                                      }else{
+                                      }elseif(!$is_usdt_manual){
                                   ?>
                                           <div class="col-sm-4 mb-3">
                                             <label class="form-label fw-medium text-dark">Transaction Id</label>

@@ -1,0 +1,6 @@
+{
+  "type": "plugins",
+  "slug": "usdt-manual",
+  "name": "USDT Manual",
+  "mrdr": "payment-gateway"
+}

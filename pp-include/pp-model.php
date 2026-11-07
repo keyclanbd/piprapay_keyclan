@@ -1275,7 +1275,14 @@ if($action == "forgot-password"){
                             }
                         }
                         
-                        if($action_name == "send-ipn"){   
+                        if($action_name == "reject" && ($response_transaction_checker['response'][0]['transaction_status'] ?? '') === 'pending'){
+                            $transaction_pp_id = $response_transaction_checker['response'][0]['pp_id'];
+                            if (pp_set_transaction_status($transaction_pp_id, 'failed') && function_exists('pp_trigger_hook')) {
+                                pp_trigger_hook('pp_transaction_ipn', $transaction_pp_id);
+                            }
+                        }
+
+                        if($action_name == "send-ipn"){
                             if (function_exists('pp_trigger_hook')) {
                                 pp_trigger_hook('pp_transaction_ipn', $response_transaction_checker['response'][0]['pp_id']);
                             }
@@ -2457,31 +2464,50 @@ $i_id = bin2hex(random_bytes(12));
                     $newData['show_when_unavailable'] = 'enable';
                 }
                 unset($newData['gateway_currency'], $newData['is_currency_converted']);
-                if (isset($_FILES['qr_code']) && $_FILES['qr_code']['error'] === UPLOAD_ERR_OK) {
-                    $allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
-                    $mime = mime_content_type($_FILES['qr_code']['tmp_name']);
-                    if (in_array($mime, $allowedTypes, true) && $_FILES['qr_code']['size'] <= 5 * 1024 * 1024) {
-                        $uploadDir = __DIR__ . '/../pp-content/uploads/gateway-assets/';
-                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                        $extension = strtolower(pathinfo($_FILES['qr_code']['name'], PATHINFO_EXTENSION));
-                        $filename = $plugin_slug . '-qr-' . bin2hex(random_bytes(8)) . '.' . $extension;
-                        if (move_uploaded_file($_FILES['qr_code']['tmp_name'], $uploadDir . $filename)) {
-                            $newData['qr_code'] = pp_get_site_url() . '/pp-content/uploads/gateway-assets/' . $filename;
-                        }
+
+                // A gateway with its own settings rules ships <slug>-helpers.php with <slug>_prepare_settings().
+                $settingsNotice = '';
+                if (preg_match('/^[a-z0-9-]+$/', (string) $plugin_slug)) {
+                    $gatewayHelpers = __DIR__ . '/../pp-content/plugins/payment-gateway/' . $plugin_slug . '/' . $plugin_slug . '-helpers.php';
+                    $prepareSettings = str_replace('-', '_', $plugin_slug) . '_prepare_settings';
+                    if (is_file($gatewayHelpers)) {
+                        require_once $gatewayHelpers;
                     }
+                    if (function_exists($prepareSettings)) {
+                        $prepared = $prepareSettings($newData, pp_get_plugin_setting($plugin_slug, false), $_FILES);
+                        if (($prepared['status'] ?? false) !== true) {
+                            header('Content-Type: application/json');
+                            echo json_encode(['status' => false, 'message' => $prepared['message'] ?? 'Failed to save settings.']);
+                            exit();
+                        }
+                        $newData = $prepared['settings'];
+                        $settingsNotice = $prepared['notice'] ?? '';
+                    }
+                }
+
+                $currentSettings = pp_get_plugin_setting($plugin_slug, false);
+                $qrResult = pp_gateway_qr_after_save($plugin_slug, (string) ($currentSettings['qr_code'] ?? ''), $_FILES['qr_code'] ?? null);
+                if ($qrResult['status'] !== true) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['status' => false, 'message' => $qrResult['message']]);
+                    exit();
+                }
+                unset($newData['qr_code']);
+                if ($qrResult['qr_code'] !== '') {
+                    $newData['qr_code'] = $qrResult['qr_code'];
                 }
                 $success = pp_set_plugin_setting($plugin_slug, $newData);
             
                 header('Content-Type: application/json');
                 if ($success) {
-                    echo json_encode(['status' => true, 'message' => 'Settings saved successfully!']);
+                    echo json_encode(['status' => true, 'message' => 'Settings saved successfully!'.$settingsNotice]);
                 } else {
                     echo json_encode(['status' => false, 'message' => 'Failed to save settings.']);
                 }
             }
-            
-            
-            
+
+
+
             if($action == "theme_update-submit"){
                 if ($mode == "demo") {
                     echo json_encode(["status" => "false", "message" => "Error: Demo mode is active"]);
