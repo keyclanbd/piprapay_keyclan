@@ -113,8 +113,9 @@
     {
       opacity: 0;
     }
+    /* See-through so it suits both themes: appearance swaps the stylesheet, with no dark selector to use here. */
     table tr:hover {
-      background-color: #f8fafd;
+      background-color: rgba(127, 140, 155, 0.14);
       cursor: pointer;
     }
   </style>
