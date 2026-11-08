@@ -5,8 +5,8 @@
 
 $plugin_meta = [
     'Plugin Name'       => 'Telegram Bot Notification',
-    'Description'       => 'Telegram Bot Notification plugin for PipraPay delivers real-time transaction alerts directly to your Telegram via a bot integration.',
-    'Version'           => '1.0.0',
+    'Description'       => 'Telegram Bot Notification plugin for PipraPay delivers real-time transaction and security alerts directly to your Telegram via a bot integration.',
+    'Version'           => '1.1.0',
     'Author'            => 'PipraPay',
     'Author URI'        => 'https://piprapay.com/',
     'License'           => 'GPL-2.0+',

@@ -9,6 +9,7 @@
     $notifyCreated = strtolower((string) ($settings['notify_created'] ?? 'disable'));
     $notifyPending = strtolower((string) ($settings['notify_pending'] ?? 'enable'));
     $notifyCompleted = strtolower((string) ($settings['notify_completed'] ?? 'enable'));
+    $notifyAdminActivity = strtolower((string) ($settings['notify_admin_activity'] ?? 'enable'));
 ?>
 
 <form id="telegramBotSettingsForm" method="post" action="">
@@ -61,7 +62,7 @@
                         <option value="disable" <?php echo ($status === 'disable') ? 'selected' : '' ?>>Disable</option>
                       </select>
                     </div>
-                    <div class="text-secondary mt-2">Disable to stop sending transaction and invoice alerts.</div>
+                    <div class="text-secondary mt-2">Disable to stop sending all alerts: transactions, invoices and security.</div>
                   </div>
                 </div>
 
@@ -116,6 +117,25 @@
                       </select>
                     </div>
                     <div class="text-secondary mt-2">Alert when a transaction is completed, failed or refunded.</div>
+                  </div>
+
+                  <div class="col-sm-12">
+                    <label for="notify_admin_activity" class="col-sm-12 col-form-label form-label">Security &amp; Admin Activity</label>
+                    <div class="input-group">
+                      <select class="form-control" name="notify_admin_activity" id="notify_admin_activity">
+                        <option value="enable" <?php echo ($notifyAdminActivity === 'disable') ? '' : 'selected' ?>>Enable</option>
+                        <option value="disable" <?php echo ($notifyAdminActivity === 'disable') ? 'selected' : '' ?>>Disable</option>
+                      </select>
+                    </div>
+                    <div class="text-secondary mt-2">Alert on admin logins, blocked login attempts, gateway changes (such as a new phone number or wallet address), password, email, API key and 2FA changes, and plugin installs. Secret values are never sent, only that they changed. Recommended: keep this on.</div>
+                  </div>
+
+                  <div class="col-sm-12">
+                    <label for="security_chat_id" class="col-sm-12 col-form-label form-label">Security Alerts Chat ID (optional)</label>
+                    <div class="input-group">
+                      <input type="text" class="form-control" name="security_chat_id" id="security_chat_id" placeholder="e.g. -1001234567890 or @mysecuritychannel" aria-label="Enter Security Alerts Chat ID" value="<?= htmlspecialchars($settings['security_chat_id'] ?? '') ?>" autocomplete="off">
+                    </div>
+                    <div class="text-secondary mt-2">Chat for security and admin activity alerts, separate from transactions. Uses the same bot, so add the bot as an administrator when using a group or channel. Leave empty to send them to the main Chat ID.</div>
                   </div>
                 </div>
             </div>

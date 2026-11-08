@@ -61,6 +61,11 @@ if(isset($_POST['two-factor-authentication-action'])){
                 if ($auth_status == "enable" && $proof !== '') {
                     setsCookie('pp_two_factor_authentication', $proof);
                 }
+                if (function_exists('pp_notify_admin_activity') && ($current['auth_status'] ?? 'disable') !== $auth_status) {
+                    pp_notify_admin_activity('two_factor_updated', $auth_status == "enable" ? 'Two-Factor Authentication Enabled' : 'Two-Factor Authentication Disabled', [
+                        $auth_status == "enable" ? 'Admin logins now need the authenticator code.' : 'Admin logins now need only the password.',
+                    ]);
+                }
                 echo json_encode(['status' => "true", 'message' => 'Code is valid! Authentication successful.']);
             }else{
                 echo json_encode(['status' => "false", 'message' => 'Failed to save settings.']);
@@ -119,6 +124,13 @@ if(isset($_POST['two-factor-authentication-action-login'])){
         } else {
             $attempts['count']++;
             $_SESSION['pp_2fa_attempts'] = $attempts;
+            // The password was right but the code was not, five times: someone may have the password.
+            if ($attempts['count'] === 5 && function_exists('pp_notify_admin_activity')) {
+                pp_notify_admin_activity('two_factor_blocked', 'Two-Factor Code Blocked', [
+                    'Reason: 5 wrong authenticator codes after a correct password',
+                    'If this was not you, change your admin password now.',
+                ]);
+            }
             echo json_encode(['status' => "false", 'message' => 'Invalid code. Try again.']);
         }
     }

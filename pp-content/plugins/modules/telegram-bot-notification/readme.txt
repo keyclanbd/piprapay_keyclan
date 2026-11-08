@@ -4,7 +4,7 @@ Donate link: https://piprapay.com/donate
 Tags: notification, bot notification, admin notification
 Requires at least: 1.0.0
 Tested up to: 1.0.0
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPL-2.0+
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,12 +22,18 @@ Connect the bot with a bot token and a chat ID. Create a bot with @BotFather, co
 * Transaction alerts include the PipraPay ID, status, amount, payment method, customer account, gateway transaction ID, product and time
 * Status emoji on every alert (new, pending, completed, failed, refunded)
 * Customer receipts are sent as a photo together with the transaction details
+* Security alerts for admin activity: new admin logins, blocked login and 2FA attempts, gateway setting changes (old and new phone number, wallet address and other fields), password, email, API key, webhook and 2FA changes, currency rate changes and plugin installs. Secret fields are reported as changed but never sent
+* Optional separate chat ID for security alerts, so they stay apart from transaction alerts
+* Moving the alerts to another chat or switching them off is reported to the chat that was receiving them
 * Works with users, groups, supergroups and channels
 * Enable or disable the alerts at any time
 
 **Why Use Telegram Bot Notification?**
 
 == Changelog ==
+
+= 1.1.0 =
+* Security and admin activity alerts (on by default)
 
 = 1.0.0 =
 * Initial release

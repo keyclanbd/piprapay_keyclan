@@ -8,6 +8,7 @@ add_action('pp_transaction_created', 'telegram_bot_notification_transaction_crea
 add_action('pp_transaction_pending', 'telegram_bot_notification_transaction_pending');
 add_action('pp_transaction_ipn', 'telegram_bot_notification_transaction_admin_ipn');
 add_action('pp_invoice_ipn', 'telegram_bot_notification_invoice_admin_ipn');
+add_action('pp_admin_activity', 'telegram_bot_notification_admin_activity');
 
 // Admin settings endpoint (bot token + chat id based connection)
 if (isset($_POST['telegram-bot-notification-action']) && checkCookie('pp_admin')) {
@@ -23,7 +24,8 @@ function telegram_bot_notification_handle_admin_request() {
 
     global $global_user_login;
 
-    if (empty($global_user_login)) {
+    // A password session that has not entered the 2FA code yet is not an admin yet.
+    if (empty($global_user_login) || (function_exists('pp_admin_two_factor_pending') && pp_admin_two_factor_pending())) {
         echo json_encode(['status' => false, 'message' => 'Unauthorized request.']);
         exit();
     }
@@ -39,6 +41,7 @@ function telegram_bot_notification_handle_admin_request() {
 
     $botToken = isset($_POST['telegram_bot_token']) && is_string($_POST['telegram_bot_token']) ? trim($_POST['telegram_bot_token']) : (string) ($settings['telegram_bot_token'] ?? '');
     $chatId = isset($_POST['chat_id']) && is_string($_POST['chat_id']) ? trim($_POST['chat_id']) : (string) ($settings['chat_id'] ?? '');
+    $securityChatId = isset($_POST['security_chat_id']) && is_string($_POST['security_chat_id']) ? trim($_POST['security_chat_id']) : (string) ($settings['security_chat_id'] ?? '');
 
     if ($action === 'test_notification') {
         if ($botToken === '' || $chatId === '') {
@@ -60,11 +63,26 @@ function telegram_bot_notification_handle_admin_request() {
 
         $message = "Test notification from PipraPay.\nBot: @" . ($chat['response']['result']['username'] ?? 'bot') . "\nChat: " . ($chat['response']['result']['title'] ?? $chatId) . "\nTime: " . date('Y-m-d H:i:s');
 
-        if (telegram_bot_send_message($botToken, $chat['response']['result']['id'], $message)) {
-            echo json_encode(['status' => true, 'message' => 'Test notification sent successfully.']);
-        } else {
-            echo json_encode(['status' => false, 'message' => 'Test notification could not be sent. Check the bot token and chat ID.']);
+        $securityChat = null;
+        if ($securityChatId !== '') {
+            $securityChat = telegram_bot_resolve_chat($botToken, $securityChatId, $botInfo['response']['result']['id'] ?? null);
+            if (empty($securityChat['ok'])) {
+                echo json_encode(['status' => false, 'message' => 'Security alerts chat: ' . $securityChat['message']]);
+                exit();
+            }
         }
+
+        if (!telegram_bot_send_message($botToken, $chat['response']['result']['id'], $message)) {
+            echo json_encode(['status' => false, 'message' => 'Test notification could not be sent. Check the bot token and chat ID.']);
+            exit();
+        }
+
+        if ($securityChat !== null && !telegram_bot_send_message($botToken, $securityChat['response']['result']['id'], "Test security alert from PipraPay.\nTime: " . date('Y-m-d H:i:s'))) {
+            echo json_encode(['status' => false, 'message' => 'The transaction chat worked, but the security alerts chat could not be reached.']);
+            exit();
+        }
+
+        echo json_encode(['status' => true, 'message' => $securityChat !== null ? 'Test notifications sent to both chats.' : 'Test notification sent successfully.']);
         exit();
     }
 
@@ -92,6 +110,18 @@ function telegram_bot_notification_handle_admin_request() {
     }
 
     $resolvedChatId = (string) $chat['response']['result']['id'];
+
+    // Optional: left empty, security alerts go to the main chat.
+    $resolvedSecurityChatId = '';
+    if ($securityChatId !== '') {
+        $securityChat = telegram_bot_resolve_chat($botToken, $securityChatId, $botInfo['response']['result']['id'] ?? null);
+        if (empty($securityChat['ok'])) {
+            echo json_encode(['status' => false, 'message' => 'Security alerts chat: ' . $securityChat['message']]);
+            exit();
+        }
+        $resolvedSecurityChatId = (string) $securityChat['response']['result']['id'];
+    }
+
     $status = isset($_POST['status']) && is_string($_POST['status'])
         ? (strtolower(trim($_POST['status'])) === 'enable' ? 'enable' : 'disable')
         : (string) ($settings['status'] ?? 'enable');
@@ -100,13 +130,16 @@ function telegram_bot_notification_handle_admin_request() {
         'name' => $settings['name'] ?? 'Telegram Bot Notification',
         'telegram_bot_token' => $botToken,
         'chat_id' => $resolvedChatId,
+        'security_chat_id' => $resolvedSecurityChatId,
         'status' => $status,
         'notify_created' => telegram_bot_post_flag($settings, 'notify_created', 'disable'),
         'notify_pending' => telegram_bot_post_flag($settings, 'notify_pending'),
         'notify_completed' => telegram_bot_post_flag($settings, 'notify_completed'),
+        'notify_admin_activity' => telegram_bot_post_flag($settings, 'notify_admin_activity'),
     ]);
 
     if (function_exists('pp_set_plugin_setting') && pp_set_plugin_setting('telegram-bot-notification', $newSettings)) {
+        telegram_bot_report_own_settings_change($settings, $newSettings);
         echo json_encode(['status' => true, 'message' => 'Settings saved successfully!']);
     } else {
         echo json_encode(['status' => false, 'message' => 'Failed to save settings.']);
@@ -464,4 +497,143 @@ function telegram_bot_notification_invoice_admin_ipn($invoice_id) {
     }
 
     send_telegram_bot_notification(implode("\n", $lines));
+}
+
+/**
+ * Report a change to these alert settings. Someone who wants to hide what they do next
+ * would move the alerts to another chat or switch them off, so the chat that was
+ * receiving alerts until now is told as well.
+ */
+function telegram_bot_report_own_settings_change($oldSettings, $newSettings) {
+    if (!function_exists('pp_notify_admin_activity') || !function_exists('pp_describe_setting_changes')) {
+        return;
+    }
+
+    $keys = ['telegram_bot_token', 'chat_id', 'security_chat_id', 'status', 'notify_created', 'notify_pending', 'notify_completed', 'notify_admin_activity'];
+    $changes = pp_describe_setting_changes(
+        array_intersect_key((array) $oldSettings, array_flip($keys)),
+        array_intersect_key((array) $newSettings, array_flip($keys))
+    );
+    if (!$changes) {
+        return;
+    }
+
+    $lines = array_merge(['Changes:'], $changes);
+
+    // Reaches the new chat (and any other notification plugin) through the usual hook.
+    pp_notify_admin_activity('telegram_settings_updated', 'Telegram Alert Settings Changed', $lines);
+
+    $oldDestination = telegram_bot_security_settings($oldSettings);
+    $newDestination = telegram_bot_security_settings($newSettings);
+    $destinationChanged = trim((string) ($oldDestination['telegram_bot_token'] ?? '')) !== trim((string) ($newDestination['telegram_bot_token'] ?? ''))
+        || trim((string) ($oldDestination['chat_id'] ?? '')) !== trim((string) ($newDestination['chat_id'] ?? ''));
+    $alertsNowOff = telegram_bot_flag($newSettings, 'status') === 'disable'
+        || telegram_bot_flag($newSettings, 'notify_admin_activity') === 'disable';
+
+    if (($destinationChanged || $alertsNowOff) && telegram_bot_flag($oldSettings, 'notify_admin_activity') === 'enable') {
+        $admin = $GLOBALS['global_user_response']['response'][0] ?? [];
+        $device = function_exists('getUserDeviceInfo') ? getUserDeviceInfo() : [];
+        $message = telegram_bot_format_admin_activity([
+            'event' => 'telegram_settings_updated',
+            'title' => 'Telegram Alert Settings Changed',
+            'lines' => array_merge($lines, [$destinationChanged ? 'This chat will no longer receive security alerts.' : 'Security alerts to this chat were switched off.']),
+            'admin_name' => (string) ($admin['name'] ?? ''),
+            'admin_username' => (string) ($admin['username'] ?? ''),
+            'ip' => (string) ($_SERVER['REMOTE_ADDR'] ?? 'Unknown'),
+            'device' => (string) ($device['device'] ?? ''),
+            'browser' => (string) ($device['browser'] ?? ''),
+            'time' => function_exists('getCurrentDatetime') ? getCurrentDatetime('Y-m-d H:i:s') : date('Y-m-d H:i:s'),
+        ]);
+        send_telegram_bot_notification($message, '', $oldDestination);
+    }
+}
+
+/**
+ * Settings that send to the security alerts chat, or the main chat when none is set.
+ */
+function telegram_bot_security_settings($settings) {
+    $settings = (array) $settings;
+    $securityChatId = trim((string) ($settings['security_chat_id'] ?? ''));
+
+    if ($securityChatId !== '') {
+        $settings['chat_id'] = $securityChatId;
+    }
+
+    return $settings;
+}
+
+/**
+ * Emoji used in front of an admin activity alert.
+ */
+function telegram_bot_activity_emoji($event) {
+    $emojis = [
+        'admin_login' => '🔐',
+        'login_blocked' => '🚫',
+        'two_factor_blocked' => '🚫',
+        'two_factor_updated' => '🛡️',
+        'password_reset' => '🔑',
+        'admin_password_changed' => '🔑',
+        'admin_email_updated' => '👤',
+        'admin_profile_updated' => '👤',
+        'gateway_updated' => '💳',
+        'plugin_settings_updated' => '🧩',
+        'plugin_activated' => '🧩',
+        'plugin_deactivated' => '🧩',
+        'plugin_deleted' => '🗑️',
+        'package_uploaded' => '📦',
+        'api_key_regenerated' => '🗝️',
+        'webhook_regenerated' => '🗝️',
+        'currency_rate_updated' => '💱',
+        'system_settings_updated' => '⚙️',
+        'theme_activated' => '🎨',
+        'theme_settings_updated' => '🎨',
+        'telegram_settings_updated' => '🔔',
+    ];
+
+    return $emojis[(string) $event] ?? '⚠️';
+}
+
+/**
+ * Plain text alert for an admin activity (see pp_notify_admin_activity()).
+ */
+function telegram_bot_format_admin_activity($activity) {
+    $lines = [telegram_bot_activity_emoji($activity['event'] ?? '') . ' ' . ($activity['title'] ?? 'Admin Activity')];
+
+    foreach ((array) ($activity['lines'] ?? []) as $line) {
+        $lines[] = (string) $line;
+    }
+
+    $name = trim((string) ($activity['admin_name'] ?? ''));
+    $username = trim((string) ($activity['admin_username'] ?? ''));
+    if ($name !== '' || $username !== '') {
+        $lines[] = 'By: ' . trim($name . ($username !== '' ? " (@$username)" : ''));
+    } else {
+        $lines[] = 'By: not signed in';
+    }
+
+    $lines[] = 'IP: ' . ($activity['ip'] ?? 'Unknown');
+
+    $device = trim(implode(' · ', array_filter([(string) ($activity['device'] ?? ''), (string) ($activity['browser'] ?? '')])));
+    if ($device !== '') {
+        $lines[] = 'Device: ' . $device;
+    }
+
+    $lines[] = 'Time: ' . ($activity['time'] ?? date('Y-m-d H:i:s'));
+    $lines[] = 'Not you? Change your admin password and check the gateway settings now.';
+
+    $message = implode("\n", $lines);
+
+    // Telegram rejects messages over 4096 characters.
+    return function_exists('mb_substr') ? mb_substr($message, 0, 4000) : substr($message, 0, 4000);
+}
+
+// Admin activity alert: logins, gateway number or wallet changes, API keys, plugins...
+function telegram_bot_notification_admin_activity($activity) {
+    $settings = pp_get_plugin_setting('telegram-bot-notification');
+
+    if (telegram_bot_flag($settings, 'notify_admin_activity') === 'disable') {
+        return;
+    }
+
+    send_telegram_bot_notification(telegram_bot_format_admin_activity((array) $activity), '', telegram_bot_security_settings($settings));
 }

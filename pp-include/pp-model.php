@@ -104,6 +104,11 @@
                 echo json_encode(['status' => "false", 'message' => 'Unauthorized request']);
                 exit();
             }
+            // Signed in with the password but the 2FA code was not entered yet.
+            if (isAdminActionAllowed($action) && pp_admin_two_factor_pending()) {
+                echo json_encode(['status' => "false", 'message' => 'Two-factor verification required. Please reload the page and enter your code.']);
+                exit();
+            }
             if($action == "pp_admin_info"){
                 echo json_encode(['status' => "true", 'full_name' => $global_user_response['response'][0]['name'], 'username' => $global_user_response['response'][0]['username'], 'email' => $global_user_response['response'][0]['email']]);
             }
@@ -138,6 +143,14 @@ if($action == "login"){
                     }
                     @mkdir(dirname($rateLimitFile), 0755, true);
                     file_put_contents($rateLimitFile, json_encode($rateLimitData), LOCK_EX);
+
+                    // Alert once, when this attempt locks the IP out.
+                    if ($rateLimitData[$rateLimitKey]['count'] === 5) {
+                        pp_notify_admin_activity('login_blocked', 'Admin Login Blocked', [
+                            'Reason: 5 wrong passwords in a row, login paused for 5 minutes',
+                            'Tried account: ' . substr((string) ($_POST['email_username'] ?? ''), 0, 80),
+                        ], []);
+                    }
                 };
 
                 $email_username = escape_string($_POST['email_username']);
@@ -173,7 +186,17 @@ if($action == "login"){
                             insertData($db_prefix.'browser_log', $columns, $values);
                             
                             setsCookie('pp_admin', $cookie);
-                            
+
+                            $twoFactorOn = false;
+                            $twoFactor = json_decode(getData($db_prefix.'plugins', 'WHERE plugin_slug="two-factor-authentication" AND status="active"'), true);
+                            if (($twoFactor['status'] ?? false) == true) {
+                                $twoFactorSettings = json_decode((string) ($twoFactor['response'][0]['plugin_array'] ?? ''), true);
+                                $twoFactorOn = is_array($twoFactorSettings) && ($twoFactorSettings['auth_status'] ?? '') === 'enable';
+                            }
+                            pp_notify_admin_activity('admin_login', 'New Admin Login', [
+                                'Two-factor: ' . ($twoFactorOn ? 'code still required' : 'not enabled'),
+                            ], $response['response'][0]);
+
                             echo json_encode(['status' => "true", 'target' => "dashboard"]);
                         }else{
                             $trackFailedAttempt();
@@ -211,6 +234,9 @@ if($action == "forgot-password"){
                             updateData($db_prefix.'admins', ['password', 'reset_token', 'reset_token_expires_at', 'reset_token_used_at'], [$hashedPass, '--', '--', getCurrentDatetime('Y-m-d H:i:s')], "id = '".$adminId."'");
                             updateData($db_prefix.'browser_log', ['status'], ['inactive'], 'a_id="' . $adminId . '"');
                             logoutCookie();
+                            pp_notify_admin_activity('password_reset', 'Admin Password Reset', [
+                                'Reset with a reset token. All admin sessions were signed out.',
+                            ], $resetRecord['response'][0]);
                             echo json_encode(['status' => "true", 'message' => 'Password changed successfully']);
                         }
                     }
@@ -554,7 +580,15 @@ if($action == "forgot-password"){
                         $condition = "id = '".$global_user_response['response'][0]['id']."'"; 
                         
                         updateData($db_prefix.'admins', $columns, $values, $condition);
-                        
+
+                        $profileChanges = pp_describe_setting_changes(
+                            ['name' => $global_user_response['response'][0]['name'] ?? '', 'username' => $global_user_response['response'][0]['username'] ?? ''],
+                            ['name' => $_POST['fullname'], 'username' => $_POST['username']]
+                        );
+                        if ($profileChanges) {
+                            pp_notify_admin_activity('admin_profile_updated', 'Admin Profile Changed', $profileChanges);
+                        }
+
                         echo json_encode(['status' => "true", 'message' => "Basic information updated"]);
                     }else{
                         echo json_encode(['status' => "false", 'message' => 'Invalid data']);
@@ -579,7 +613,12 @@ if($action == "forgot-password"){
                         $condition = "id = '".$global_user_response['response'][0]['id']."'"; 
                         
                         updateData($db_prefix.'admins', $columns, $values, $condition);
-                        
+
+                        $emailChanges = pp_describe_setting_changes(['email' => $global_user_response['response'][0]['email'] ?? ''], ['email' => $_POST['email']]);
+                        if ($emailChanges) {
+                            pp_notify_admin_activity('admin_email_updated', 'Admin Email Changed', $emailChanges);
+                        }
+
                         echo json_encode(['status' => "true", 'message' => "Email address updated"]);
                     }else{
                         echo json_encode(['status' => "false", 'message' => 'Invalid data']);
@@ -614,6 +653,9 @@ if($action == "forgot-password"){
                                 updateData($db_prefix.'admins', $columns, $values, $condition);
                                 updateData($db_prefix.'browser_log', ['status'], ['inactive'], 'a_id="' . $global_user_response['response'][0]['id'] . '"');
                                 logoutCookie();
+                                pp_notify_admin_activity('admin_password_changed', 'Admin Password Changed', [
+                                    'All admin sessions were signed out.',
+                                ]);
                                 echo json_encode(['status' => "true", 'message' => "Password updated"]);
                             }else{
                                 echo json_encode(['status' => "false", 'message' => 'Incorrect New password & Confirm password']);
@@ -645,10 +687,18 @@ if($action == "forgot-password"){
                     if($global_user_login == true){
                         $columns = ['site_name', 'default_timezone', 'default_currency', 'currency_symbol'];
                         $values = [$sitename, $default_timezone, $default_currency, $currency_symbol];
-                        $condition = "id = '1'"; 
-                        
+                        $condition = "id = '1'";
+
                         updateData($db_prefix.'settings', $columns, $values, $condition);
-                        
+
+                        $systemChanges = pp_describe_setting_changes(
+                            array_intersect_key($global_setting_response['response'][0] ?? [], array_flip($columns)),
+                            array_combine($columns, [$_POST['sitename'], $_POST['default_timezone'], $_POST['default_currency'], $_POST['currency_symbol']])
+                        );
+                        if ($systemChanges) {
+                            pp_notify_admin_activity('system_settings_updated', 'System Settings Changed', $systemChanges);
+                        }
+
                         echo json_encode(['status' => "true", 'message' => "Basic information updated"]);
                     }else{
                         echo json_encode(['status' => "false", 'message' => 'Invalid data']);
@@ -821,7 +871,12 @@ if($action == "forgot-password"){
                 
                 // Cleanup
                 deleteFolders($tempDir);
-                
+
+                pp_notify_admin_activity('package_uploaded', 'Plugin or Theme Uploaded', [
+                    "Installed: $type/$mrdr/$slug",
+                    'New code was added to the server. If you did not do this, remove it now.',
+                ]);
+
                 echo json_encode([
                     "status" => "success",
                     "message" => "Uploaded successfully to $type/$mrdr/$slug/"
@@ -1050,6 +1105,9 @@ if($action == "forgot-password"){
                     $updated = updateData($db_prefix.'settings', $columns, $values, $condition);
                     
                     if ($updated) {
+                        pp_notify_admin_activity('api_key_regenerated', 'API Key Regenerated', [
+                            'The old API key stopped working. Update it in every site that uses it.',
+                        ]);
                         echo json_encode(['status' => "true", 'api' => $api_key]);
                     } else {
                         echo json_encode(['status' => "false", 'message' => 'Unable to save api key']);
@@ -1131,7 +1189,15 @@ if($action == "forgot-password"){
                     $condition = "id = '".$currency_id."'"; 
                     
                     updateData($db_prefix.'currency', $columns, $values, $condition);
-                    
+
+                    $oldRate = (string) ($response['response'][0]['currency_rate'] ?? '');
+                    if ($oldRate !== (string) $_POST['currency_rate']) {
+                        pp_notify_admin_activity('currency_rate_updated', 'Currency Rate Changed', [
+                            'Currency: ' . ($response['response'][0]['currency_code'] ?? ''),
+                            '• Rate: ' . $oldRate . ' → ' . substr((string) $_POST['currency_rate'], 0, 40),
+                        ]);
+                    }
+
                     echo json_encode(['status' => "true", 'message' => "Currency Updated"]);
                 }else{
                     echo json_encode(['status' => "false", 'message' => 'Invalid data']);
@@ -1708,6 +1774,9 @@ if($action == "forgot-password"){
                     $updated = updateData($db_prefix.'settings', $columns, $values, $condition);
                     
                     if ($updated) {
+                        pp_notify_admin_activity('webhook_regenerated', 'SMS Webhook Key Regenerated', [
+                            'The old webhook URL stopped working. Update it in the SMS forwarder app.',
+                        ]);
                         echo json_encode(['status' => "true", 'webhook' => $webhook_key]);
                     } else {
                         echo json_encode(['status' => "false", 'message' => 'Unable to save webhook url']);
@@ -2352,6 +2421,8 @@ $i_id = bin2hex(random_bytes(12));
                                 $condition = "plugin_slug = '".$pluginfolder."'"; 
                                 
                                 deleteData($db_prefix."plugins", $condition);
+
+                                pp_notify_admin_activity('plugin_deleted', ($mainfolder === 'payment-gateway' ? 'Gateway' : 'Plugin').' Deleted', ['Plugin: '.$pluginfolder]);
                                 
                                 echo json_encode(['status' => "true", 'message' => "Plugin delete successfully."]);  
                             } else {
@@ -2369,6 +2440,10 @@ $i_id = bin2hex(random_bytes(12));
                 
                                 $condition = "id = '".$response['response'][0]['id']."'"; 
                                 updateData($db_prefix.'plugins', $columns, $values, $condition);
+
+                                if (($response['response'][0]['status'] ?? '') !== 'active') {
+                                    pp_notify_admin_activity('plugin_activated', ($mainfolder === 'payment-gateway' ? 'Gateway' : 'Plugin').' Activated', ['Plugin: '.($response['response'][0]['plugin_name'] ?? $pluginfolder)]);
+                                }
                                 
                                 echo json_encode(['status' => "true", 'message' => ""]);
                             }
@@ -2378,6 +2453,10 @@ $i_id = bin2hex(random_bytes(12));
                 
                                 $condition = "id = '".$response['response'][0]['id']."'"; 
                                 updateData($db_prefix.'plugins', $columns, $values, $condition);
+
+                                if (($response['response'][0]['status'] ?? '') === 'active') {
+                                    pp_notify_admin_activity('plugin_deactivated', ($mainfolder === 'payment-gateway' ? 'Gateway' : 'Plugin').' Deactivated', ['Plugin: '.($response['response'][0]['plugin_name'] ?? $pluginfolder)]);
+                                }
                                 
                                 echo json_encode(['status' => "true", 'message' => ""]);
                             }
@@ -2389,6 +2468,8 @@ $i_id = bin2hex(random_bytes(12));
                                 $values = [escape_string(htmlspecialchars($pluginInfo['Plugin Name'] ?? '')), escape_string($pluginfolder), $mainfolder, '--', 'active', escape_string(getCurrentDatetime('Y-m-d H:i:s'))];
                 
                                 insertData($db_prefix.'plugins', $columns, $values);
+
+                                pp_notify_admin_activity('plugin_activated', ($mainfolder === 'payment-gateway' ? 'Gateway' : 'Plugin').' Activated', ['Plugin: '.($pluginInfo['Plugin Name'] ?? $pluginfolder)]);
                                 
                                 echo json_encode(['status' => "true", 'message' => ""]);
                             }
@@ -2423,6 +2504,10 @@ $i_id = bin2hex(random_bytes(12));
             
                             $condition = "id = '1'"; 
                             updateData($db_prefix.'settings', $columns, $values, $condition);
+
+                            pp_notify_admin_activity('theme_activated', 'Checkout Theme Changed', [
+                                '• Theme: '.($global_setting_response['response'][0]['gateway_theme'] ?? '').' → '.$themesfolder,
+                            ]);
                             
                             echo json_encode(['status' => "true", 'message' => ""]);
                         }
@@ -2439,11 +2524,19 @@ $i_id = bin2hex(random_bytes(12));
                     exit();
                 }
                 
-                $plugin_slug = $_POST['plugin_slug']; 
+                $plugin_slug = $_POST['plugin_slug'] ?? '';
+                // The slug names a folder and a database row; anything else is not a plugin.
+                if (!is_string($plugin_slug) || !preg_match('/^[A-Za-z0-9_-]+$/', $plugin_slug)) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['status' => false, 'message' => 'Invalid plugin.']);
+                    exit();
+                }
             
                 $newData = $_POST;
                 unset($newData['action']);
                 unset($newData['plugin_slug']);
+                // Request plumbing, not settings (it was stored with every save).
+                unset($newData['csrf_token'], $newData['pp_admin_session']);
                 if (isset($newData['currency'])) {
                     $newData['currency'] = pp_normalize_currency_code($newData['currency']);
                 }
@@ -2497,6 +2590,20 @@ $i_id = bin2hex(random_bytes(12));
                     $newData['qr_code'] = $qrResult['qr_code'];
                 }
                 $success = pp_set_plugin_setting($plugin_slug, $newData);
+
+                if ($success) {
+                    $changes = pp_describe_setting_changes($currentSettings, $newData);
+                    if ($changes) {
+                        $pluginInfo = pp_get_plugin_info((string) $plugin_slug);
+                        $isGateway = ($pluginInfo['plugin_dir'] ?? 'payment-gateway') === 'payment-gateway';
+                        $pluginName = (string) ($pluginInfo['plugin_name'] ?? ($currentSettings['name'] ?? $plugin_slug));
+                        pp_notify_admin_activity(
+                            $isGateway ? 'gateway_updated' : 'plugin_settings_updated',
+                            $isGateway ? 'Gateway Settings Changed' : 'Plugin Settings Changed',
+                            array_merge([($isGateway ? 'Gateway: ' : 'Plugin: ') . $pluginName, 'Changes:'], $changes)
+                        );
+                    }
+                }
             
                 header('Content-Type: application/json');
                 if ($success) {
@@ -2514,13 +2621,29 @@ $i_id = bin2hex(random_bytes(12));
                     exit();
                 }
                 
-                $theme_slug = $_POST['theme_slug']; 
+                $theme_slug = $_POST['theme_slug'] ?? '';
+                // The slug becomes part of the config file path.
+                if (!is_string($theme_slug) || !preg_match('/^[A-Za-z0-9_-]+$/', $theme_slug) || !is_dir(__DIR__.'/../pp-content/themes/gateway/'.$theme_slug)) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['status' => false, 'message' => 'Invalid theme.']);
+                    exit();
+                }
             
                 $newData = $_POST;
                 unset($newData['action']);
                 unset($newData['theme_slug']);
+                unset($newData['csrf_token'], $newData['pp_admin_session']);
+
+                $currentThemeSettings = pp_get_theme_setting($theme_slug);
                 
                 $success = pp_set_theme_setting($theme_slug, $newData);
+
+                if ($success) {
+                    $changes = pp_describe_setting_changes($currentThemeSettings, $newData);
+                    if ($changes) {
+                        pp_notify_admin_activity('theme_settings_updated', 'Theme Settings Changed', array_merge(['Theme: ' . $theme_slug, 'Changes:'], $changes));
+                    }
+                }
             
                 header('Content-Type: application/json');
                 

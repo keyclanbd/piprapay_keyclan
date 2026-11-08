@@ -67,6 +67,130 @@
         $publicActions = ['login', 'forgot-password', 'pp-invoice-payment-link', 'pp-invoice-link'];
         return !in_array($action, $publicActions, true);
     }
+
+    // A password session is only half a login while two-factor authentication is on: the admin
+    // still has to enter the code. The 2FA screen is shown on page loads only, so every admin
+    // action (gateway saves, plugin settings, page fragments) checks this too, or a stolen
+    // password alone could change gateway numbers by posting straight to the endpoint.
+    // The proof matches two_factor_authentication_session_proof() in the 2FA module.
+    function pp_admin_two_factor_pending() {
+        global $db_prefix;
+        $conn = connectDatabase();
+
+        $result = mysqli_query($conn, "SELECT plugin_array FROM ".$db_prefix."plugins WHERE plugin_slug = 'two-factor-authentication' AND status = 'active' LIMIT 1");
+        $row = $result ? mysqli_fetch_assoc($result) : null;
+        if (!$row) {
+            return false;
+        }
+
+        $settings = json_decode((string) $row['plugin_array'], true);
+        $secret = is_array($settings) ? (string) ($settings['secret_key'] ?? '') : '';
+        if (!is_array($settings) || ($settings['auth_status'] ?? '') !== 'enable' || $secret === '') {
+            return false;
+        }
+
+        $session = (string) ($_COOKIE['pp_admin'] ?? '');
+        if (!preg_match('/^[a-f0-9]{64}$/i', $session)) {
+            return true;
+        }
+
+        return !hash_equals(hash_hmac('sha256', $session, $secret), (string) ($_COOKIE['pp_two_factor_authentication'] ?? ''));
+    }
+
+    // Security alert for an admin-side change (login, gateway number, wallet address, API key...).
+    // Plugins pick it up with add_action('pp_admin_activity', fn($activity) => ...).
+    // A failing notifier never stops the change itself.
+    function pp_notify_admin_activity($event, $title, $lines = [], $admin = null) {
+        if (!function_exists('pp_trigger_hook')) {
+            return;
+        }
+
+        if ($admin === null) {
+            $admin = $GLOBALS['global_user_response']['response'][0] ?? [];
+        }
+        $device = function_exists('getUserDeviceInfo') ? getUserDeviceInfo() : [];
+
+        $activity = [
+            'event' => (string) $event,
+            'title' => (string) $title,
+            'lines' => array_values(array_map('strval', (array) $lines)),
+            'admin_name' => (string) ($admin['name'] ?? ''),
+            'admin_username' => (string) ($admin['username'] ?? ''),
+            'ip' => (string) ($_SERVER['REMOTE_ADDR'] ?? 'Unknown'),
+            'device' => (string) ($device['device'] ?? ''),
+            'browser' => (string) ($device['browser'] ?? ''),
+            'time' => function_exists('getCurrentDatetime') ? getCurrentDatetime('Y-m-d H:i:s') : date('Y-m-d H:i:s'),
+        ];
+
+        try {
+            pp_trigger_hook('pp_admin_activity', $activity);
+        } catch (\Throwable $e) {
+            error_log('Admin activity notification failed: ' . $e->getMessage());
+        }
+    }
+
+    // "Field: old → new" lines for a settings save. Secrets are reported as changed, never shown.
+    function pp_describe_setting_changes($old, $new, $limit = 15) {
+        $ignore = ['csrf_token', 'pp_admin_session', 'action', 'plugin_slug', 'theme_slug', 'gateway_currency', 'is_currency_converted'];
+
+        // Nested settings (USDT Manual keeps wallets[trc20][address]) get one line per value,
+        // so a single changed address is not lost inside a long JSON blob.
+        $flatten = function ($values, $prefix = '') use (&$flatten, $ignore) {
+            $flat = [];
+            foreach ((is_array($values) ? $values : []) as $key => $value) {
+                if ($prefix === '' && in_array($key, $ignore, true)) {
+                    continue;
+                }
+                $path = $prefix === '' ? (string) $key : $prefix . ' › ' . $key;
+                if (is_array($value) && $value !== []) {
+                    $flat += $flatten($value, $path);
+                } else {
+                    $flat[$path] = $value;
+                }
+            }
+            return $flat;
+        };
+        $old = $flatten($old);
+        $new = $flatten($new);
+
+        $format = function ($value) {
+            if (is_array($value) || is_object($value)) {
+                $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+            $value = trim((string) $value);
+            if ($value === '' || $value === '--') {
+                return '(empty)';
+            }
+            return function_exists('mb_strimwidth') ? mb_strimwidth($value, 0, 120, '…') : substr($value, 0, 120);
+        };
+
+        $lines = [];
+        foreach (array_unique(array_merge(array_keys($old), array_keys($new))) as $key) {
+            if (in_array($key, $ignore, true)) {
+                continue;
+            }
+            $before = $old[$key] ?? '';
+            $after = $new[$key] ?? '';
+            if ($format($before) === $format($after)) {
+                continue;
+            }
+
+            $label = ucwords(str_replace(['_', '-'], ' ', (string) $key));
+            if (preg_match('/pass|secret|token|key|signature|private|salt|hash|credential|pin$/i', (string) $key)) {
+                $lines[] = "• $label: changed (hidden)";
+            } else {
+                $lines[] = "• $label: " . $format($before) . " → " . $format($after);
+            }
+        }
+
+        if (count($lines) > $limit) {
+            $more = count($lines) - $limit;
+            $lines = array_slice($lines, 0, $limit);
+            $lines[] = "…and $more more";
+        }
+
+        return $lines;
+    }
     
     // A gateway sending the customer back (or calling its IPN) after the payment
     // session window. These handlers verify with the provider, so they must still
