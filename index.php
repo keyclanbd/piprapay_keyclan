@@ -289,8 +289,7 @@ if (file_exists(__DIR__."/pp-config.php")) {
                 exit();
             } else {
                 // The public root doesn't point visitors at the admin area.
-                http_response_code(404);
-                include __DIR__ . '/error.php';
+                include __DIR__ . '/pp-include/pp-landing.php';
                 exit();
             }
         }
