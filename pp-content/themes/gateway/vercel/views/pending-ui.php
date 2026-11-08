@@ -296,7 +296,7 @@
                             </div>
                             <div class="receipt-row">
                                 <span class="receipt-label">Method:</span>
-                                <span class="receipt-value"><?php echo $transaction_details['response'][0]['payment_method']?></span>
+                                <span class="receipt-value"><?php echo htmlspecialchars(pp_gateway_display_name($transaction_details['response'][0]))?></span>
                             </div>
                             <div class="receipt-row">
                                 <span class="receipt-label">Amount:</span>
@@ -328,7 +328,7 @@
             <div class="success-details">
                 <div class="detail-row">
                     <div class="detail-label">Payment Method</div>
-                    <div class="detail-value"><?php echo $transaction_details['response'][0]['payment_method']?></div>
+                    <div class="detail-value"><?php echo htmlspecialchars(pp_gateway_display_name($transaction_details['response'][0]))?></div>
                 </div>
                 <div class="detail-row">
                     <div class="detail-label">Amount Paid</div>
