@@ -66,91 +66,6 @@
         echo 'System is under maintenance. Please try again later.';
         exit();
     }
-
-    // Cloudflare Access only guards requests that pass through Cloudflare, and a direct hit on
-    // the server's IP doesn't. Access signs every request it lets through, so /admin checks that
-    // signature. Off until $cf_access_domain and $cf_access_aud are set in pp-config.php.
-    function pp_cloudflare_access_token_valid($jwt, $aud, $certs) {
-        $parts = explode('.', (string) $jwt);
-        if (count($parts) !== 3) {
-            return false;
-        }
-
-        $decode = function ($part) {
-            return base64_decode(strtr($part, '-_', '+/'), true);
-        };
-        $header = json_decode((string) $decode($parts[0]), true);
-        $claims = json_decode((string) $decode($parts[1]), true);
-        $signature = $decode($parts[2]);
-        if (!is_array($header) || !is_array($claims) || $signature === false || ($header['alg'] ?? '') !== 'RS256') {
-            return false;
-        }
-
-        $pem = $certs[(string) ($header['kid'] ?? '')] ?? '';
-        if ($pem === '' || openssl_verify($parts[0] . '.' . $parts[1], $signature, $pem, OPENSSL_ALGO_SHA256) !== 1) {
-            return false;
-        }
-
-        $now = time();
-        return in_array($aud, (array) ($claims['aud'] ?? []), true)
-            && (int) ($claims['exp'] ?? 0) > $now - 60
-            && (int) ($claims['nbf'] ?? 0) <= $now + 60;
-    }
-
-    // Signing certificates by key id, kept for an hour. Cloudflare rotates them, so an unknown
-    // key refreshes the list, at most once a minute. A failed refresh keeps the old list.
-    function pp_cloudflare_access_certs($domain, $kid) {
-        $cacheFile = __DIR__ . '/../cache/cf_access_certs.json';
-        $certs = is_file($cacheFile) ? json_decode((string) file_get_contents($cacheFile), true) : [];
-        $certs = is_array($certs) ? $certs : [];
-        $age = is_file($cacheFile) ? time() - filemtime($cacheFile) : PHP_INT_MAX;
-
-        if ($age < 3600 && (isset($certs[$kid]) || $age < 60)) {
-            return $certs;
-        }
-
-        $ch = curl_init('https://' . $domain . '/cdn-cgi/access/certs');
-        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 3, CURLOPT_TIMEOUT => 5]);
-        $body = json_decode((string) curl_exec($ch), true);
-        curl_close($ch);
-
-        $fresh = [];
-        foreach ((array) ($body['public_certs'] ?? []) as $cert) {
-            if (!empty($cert['kid']) && !empty($cert['cert'])) {
-                $fresh[$cert['kid']] = $cert['cert'];
-            }
-        }
-        if (!$fresh) {
-            return $certs;
-        }
-
-        @mkdir(dirname($cacheFile), 0755, true);
-        @file_put_contents($cacheFile, json_encode($fresh), LOCK_EX);
-        return $fresh;
-    }
-
-    function pp_enforce_cloudflare_access() {
-        $domain = trim((string) ($GLOBALS['cf_access_domain'] ?? ''));
-        $aud = trim((string) ($GLOBALS['cf_access_aud'] ?? ''));
-        if ($domain === '' || $aud === '' || !pp_is_admin_area()) {
-            return;
-        }
-
-        $jwt = (string) ($_SERVER['HTTP_CF_ACCESS_JWT_ASSERTION'] ?? '');
-        $header = json_decode((string) base64_decode(strtr(explode('.', $jwt)[0], '-_', '+/'), true), true);
-        $kid = (string) (is_array($header) ? ($header['kid'] ?? '') : '');
-
-        if ($jwt !== '' && $kid !== '' && function_exists('openssl_verify') && function_exists('curl_init')
-            && pp_cloudflare_access_token_valid($jwt, $aud, pp_cloudflare_access_certs($domain, $kid))) {
-            return;
-        }
-
-        http_response_code(403);
-        header('Content-Type: text/plain');
-        echo 'Forbidden';
-        exit();
-    }
-    pp_enforce_cloudflare_access();
     
     // One database connection per request. Callers still call close() when done, so
     // the shared connection ignores it; PHP closes it when the request ends.
@@ -1455,18 +1370,6 @@ function deleteData($tableName, $condition) {
         return [];
     }
     
-    // Transactions store the gateway's internal name. Customers see its Display name, read
-    // when shown so renaming a gateway also updates payments already made.
-    function pp_gateway_display_name($transaction) {
-        $stored = (string) ($transaction['payment_method'] ?? '');
-        $slug = (string) ($transaction['payment_method_id'] ?? '');
-        if ($slug === '' || $slug === '--') {
-            return $stored;
-        }
-        $displayName = trim((string) (pp_get_plugin_setting($slug, false)['display_name'] ?? ''));
-        return $displayName !== '' ? $displayName : $stored;
-    }
-
     // Images are cached by browsers for a week, so icon URLs carry the file's change time;
     // replacing an icon gives it a new URL and it shows at once.
     function pp_asset_version($path) {
