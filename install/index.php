@@ -7,7 +7,7 @@
     if (file_exists(__DIR__."/../pp-config.php")) {
 ?>
         <script>
-            location.href="https://<?php echo $_SERVER['HTTP_HOST']?>";
+            location.href="https://<?php echo $_SERVER['HTTP_HOST']?>/admin/login";
         </script>
 <?php
         exit();

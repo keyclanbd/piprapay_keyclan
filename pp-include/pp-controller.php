@@ -1,6 +1,53 @@
 <?php
     define('pp_allowed_access', true);
 
+    // Shared hosting can't enable mod_remoteip, so the visitor's IP is restored here. Admin
+    // sessions, login limits and alerts all use REMOTE_ADDR. The header is trusted only when
+    // the request really came from Cloudflare, otherwise anyone could fake their IP with it.
+    function pp_ip_in_cidr($ip, $cidr) {
+        [$subnet, $bits] = explode('/', $cidr);
+        $ipBytes = @inet_pton($ip);
+        $subnetBytes = @inet_pton($subnet);
+        if ($ipBytes === false || $subnetBytes === false || strlen($ipBytes) !== strlen($subnetBytes)) {
+            return false;
+        }
+        $bits = (int) $bits;
+        $wholeBytes = intdiv($bits, 8);
+        if (substr($ipBytes, 0, $wholeBytes) !== substr($subnetBytes, 0, $wholeBytes)) {
+            return false;
+        }
+        if ($bits % 8 === 0) {
+            return true;
+        }
+        $mask = (0xFF << (8 - $bits % 8)) & 0xFF;
+        return (ord($ipBytes[$wholeBytes]) & $mask) === (ord($subnetBytes[$wholeBytes]) & $mask);
+    }
+
+    function pp_restore_cloudflare_visitor_ip() {
+        // Published at https://www.cloudflare.com/ips/
+        $cloudflareRanges = [
+            '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18',
+            '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17',
+            '162.158.0.0/15', '104.16.0.0/13', '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+            '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32', '2405:8100::/32',
+            '2a06:98c0::/29', '2c0f:f248::/32',
+        ];
+
+        $proxyIp = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        $visitorIp = trim((string) ($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''));
+        if ($visitorIp === '' || filter_var($visitorIp, FILTER_VALIDATE_IP) === false) {
+            return;
+        }
+
+        foreach ($cloudflareRanges as $range) {
+            if (pp_ip_in_cidr($proxyIp, $range)) {
+                $_SERVER['REMOTE_ADDR'] = $visitorIp;
+                return;
+            }
+        }
+    }
+    pp_restore_cloudflare_visitor_ip();
+
     if (session_status() === PHP_SESSION_NONE) {
         $secureSession = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (string) ($_SERVER['SERVER_PORT'] ?? '') === '443';
         session_set_cookie_params([
@@ -66,6 +113,12 @@
     function isAdminActionAllowed($action) {
         $publicActions = ['login', 'forgot-password', 'pp-invoice-payment-link', 'pp-invoice-link'];
         return !in_array($action, $publicActions, true);
+    }
+
+    // Admin login and actions only run under /admin, the one path Cloudflare Access protects.
+    // pp-model.php is also loaded by public pages, which would otherwise accept them too.
+    function pp_is_admin_area() {
+        return strpos(str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '')), '/admin/') === 0;
     }
 
     // A password session is only half a login while two-factor authentication is on: the admin

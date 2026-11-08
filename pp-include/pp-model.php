@@ -80,8 +80,18 @@
         }
     }
     
+    // An admin session counts only under /admin, for core actions and plugin handlers alike.
+    if (!pp_is_admin_area()) {
+        $global_user_login = false;
+    }
+
     if(isset($_POST['action'])){
         $action = escape_string($_POST['action']);
+
+        if (in_array($action, ['login', 'forgot-password'], true) && !pp_is_admin_area()) {
+            echo json_encode(['status' => "false", 'message' => 'Unauthorized request']);
+            exit();
+        }
 
         if($action == ""){
             echo json_encode(['status' => 'false', 'message' => 'Something Wrong!']);

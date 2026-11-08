@@ -89,6 +89,11 @@ function two_factor_authentication_session_proof($secret_key) {
 }
 
 if(isset($_POST['two-factor-authentication-action-login'])){
+    if (!pp_is_admin_area()) {
+        echo json_encode(['status' => "false", 'message' => 'Unauthorized request']);
+        exit();
+    }
+
     $auth_code = escape_string($_POST['auth_code'] ?? '');
 
     // At most 5 wrong codes per 5 minutes.

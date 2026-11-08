@@ -288,19 +288,10 @@ if (file_exists(__DIR__."/pp-config.php")) {
                 echo json_encode(['status' => "false", 'message' => "Direct access not allowed"]);
                 exit();
             } else {
-                if ($global_user_login == true) {
-                    ?>
-                    <script>
-                        location.href = "https://<?php echo $_SERVER['HTTP_HOST'] ?>/admin/dashboard";
-                    </script>
-                    <?php
-                } else {
-                    ?>
-                    <script>
-                        location.href = "https://<?php echo $_SERVER['HTTP_HOST'] ?>/admin/login";
-                    </script>
-                    <?php
-                }
+                // The public root doesn't point visitors at the admin area.
+                http_response_code(404);
+                include __DIR__ . '/error.php';
+                exit();
             }
         }
     }
