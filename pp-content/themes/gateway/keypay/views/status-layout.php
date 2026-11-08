@@ -29,6 +29,7 @@
     <title><?php echo htmlspecialchars($pageTitle . ' - ' . $merchantName); ?></title>
     <?php if ($merchantLogo !== ''): ?><link rel="icon" href="<?php echo htmlspecialchars($merchantLogo); ?>"><?php endif; ?>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@700&text=%E0%A7%B3&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"></noscript>
     <style>
@@ -46,7 +47,19 @@
         .sub{text-align:center;color:#667085;margin:8px 0 22px;line-height:1.5}
         .summary{border:1px solid #edf2f7;border-radius:16px;padding:16px;margin-bottom:18px;background:#fafbff}
         .rowx{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:14px;color:#475467}
+        .done-ring,.done-tick{stroke-dasharray:100 102;animation:done-draw .6s ease-out both}
+        .done-tick{animation-duration:.4s;animation-delay:.45s}
+        @keyframes done-draw{from{stroke-dashoffset:101}to{stroke-dashoffset:0}}
+        @media (prefers-reduced-motion:reduce){.done-ring,.done-tick{animation:none}}
+        .pending-track{opacity:.18}
+        .pending-sweep,.pending-minute,.pending-hour{transform-origin:37px 37px;animation:pending-turn 2.4s linear infinite}
+        .pending-minute{animation-duration:6s}
+        .pending-hour{animation-duration:72s}
+        @keyframes pending-turn{to{transform:rotate(360deg)}}
+        @media (prefers-reduced-motion:reduce){.pending-sweep,.pending-minute,.pending-hour{animation:none}}
         .rowx strong{color:#101828;text-align:right}
+        /* Inter has no taka sign, and browsers fall back to a tiny glyph without this. */
+        .tk{font-family:'Noto Sans Bengali','Nirmala UI',Vrinda,sans-serif;font-weight:700;font-size:1.2em;line-height:1}
         .actions{display:grid;gap:12px;margin-top:18px}
         .actions form{margin:0}
         .btn-main,.btn-secondary{width:100%;min-height:48px;border-radius:14px;font:800 15px 'Inter',system-ui,sans-serif;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
@@ -71,12 +84,32 @@
         <p class="title"><?php echo htmlspecialchars($merchantName); ?></p>
     </div>
     <div class="status-body">
+        <?php if ($tone === 'pending'): ?>
+        <div class="badge-icon" aria-hidden="true">
+            <svg class="pending-clock" width="74" height="74" viewBox="0 0 74 74" fill="none" stroke="currentColor" stroke-linecap="round">
+                <circle class="pending-track" cx="37" cy="37" r="34" stroke-width="3"/>
+                <circle class="pending-sweep" cx="37" cy="37" r="34" stroke-width="3" pathLength="100" stroke-dasharray="26 74"/>
+                <circle cx="37" cy="37" r="17" stroke-width="3"/>
+                <line class="pending-hour" x1="37" y1="37" x2="37" y2="29.5" stroke-width="3"/>
+                <line class="pending-minute" x1="37" y1="37" x2="37" y2="25.5" stroke-width="2.5"/>
+                <circle cx="37" cy="37" r="1.75" fill="currentColor" stroke="none"/>
+            </svg>
+        </div>
+        <?php elseif ($tone === 'success'): ?>
+        <div class="badge-icon" aria-hidden="true">
+            <svg width="74" height="74" viewBox="0 0 74 74" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <circle class="done-ring" cx="37" cy="37" r="34" stroke-width="3" pathLength="100" transform="rotate(-90 37 37)"/>
+                <path class="done-tick" d="M25 38 L33.5 46.5 L50 29" stroke-width="4.5" pathLength="100"/>
+            </svg>
+        </div>
+        <?php else: ?>
         <div class="badge-icon"><i class="fas <?php echo htmlspecialchars($icon); ?>"></i></div>
+        <?php endif; ?>
         <h1 class="headline"><?php echo htmlspecialchars($headline); ?></h1>
         <p class="sub"><?php echo htmlspecialchars($subline); ?></p>
         <div class="summary">
             <?php foreach ($rows as $label => $value): ?>
-            <div class="rowx"><span><?php echo htmlspecialchars($label); ?></span><strong><?php echo htmlspecialchars($value); ?></strong></div>
+            <div class="rowx"><span><?php echo htmlspecialchars($label); ?></span><strong><?php echo str_replace('৳', '<span class="tk">৳</span>', htmlspecialchars($value)); ?></strong></div>
             <?php endforeach; ?>
         </div>
 <?php
@@ -106,7 +139,7 @@
             $total = number_format((float) ($row['transaction_amount'] ?? 0) + (float) ($row['transaction_fee'] ?? 0), 2);
 
             return [
-                'method' => (string) ($row['payment_method'] ?? 'Unknown'),
+                'method' => $row ? pp_gateway_display_name($row) : 'Unknown',
                 'total' => $total . ' ' . $currency,
             ];
         }

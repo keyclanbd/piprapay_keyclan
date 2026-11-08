@@ -1370,6 +1370,18 @@ function deleteData($tableName, $condition) {
         return [];
     }
     
+    // Transactions store the gateway's internal name. Customers see its Display name, read
+    // when shown so renaming a gateway also updates payments already made.
+    function pp_gateway_display_name($transaction) {
+        $stored = (string) ($transaction['payment_method'] ?? '');
+        $slug = (string) ($transaction['payment_method_id'] ?? '');
+        if ($slug === '' || $slug === '--') {
+            return $stored;
+        }
+        $displayName = trim((string) (pp_get_plugin_setting($slug, false)['display_name'] ?? ''));
+        return $displayName !== '' ? $displayName : $stored;
+    }
+
     // Images are cached by browsers for a week, so icon URLs carry the file's change time;
     // replacing an icon gives it a new URL and it shows at once.
     function pp_asset_version($path) {
