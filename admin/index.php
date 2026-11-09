@@ -51,13 +51,6 @@
         die('Direct access not allowed');
     }
     
-    if(isset($_GET['download'])){
-?>
-        <script>location.href = "https://github.com/PipraPay/PipraPay-Open-Source-App/";</script>
-<?php
-        exit();
-    }
-    
     if(isset($_GET['logout'])){
         if(function_exists('logoutCookie')){
             logoutCookie();

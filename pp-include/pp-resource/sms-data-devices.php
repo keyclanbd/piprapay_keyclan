@@ -66,11 +66,11 @@
                   <a class="btn btn-outline-danger btn-sm mb-2 mb-sm-0 me-2 btn-bulk-action-delete" href="javascript:void(0)" onclick="bulk_action('btn-bulk-action-delete', 'delete')">
                     <i class="bi-trash"></i> Delete
                   </a>
-                  <a class="btn btn-primary btn-sm mb-2 mb-sm-0 me-2 btn-bulk-action-connected" href="javascript:void(0)" onclick="bulk_action('btn-bulk-action-connected', 'Connected')">
-                    <i class="bi-wifi"></i> Connected
+                  <a class="btn btn-primary btn-sm mb-2 mb-sm-0 me-2 btn-bulk-action-connected" href="javascript:void(0)" onclick="bulk_action('btn-bulk-action-connected', 'approve')">
+                    <i class="bi-check-circle"></i> Approve
                   </a>
-                  <a class="btn btn-danger btn-sm mb-2 mb-sm-0 me-2 btn-bulk-action-disconnected" href="javascript:void(0)" onclick="bulk_action('btn-bulk-action-disconnected', 'Disconnected')">
-                    <i class="bi-wifi-off"></i> Disconnected
+                  <a class="btn btn-danger btn-sm mb-2 mb-sm-0 me-2 btn-bulk-action-disconnected" href="javascript:void(0)" onclick="bulk_action('btn-bulk-action-disconnected', 'revoke')">
+                    <i class="bi-wifi-off"></i> Remove
                   </a>
                 </div>
               </div>
@@ -111,8 +111,9 @@
                                   "dropdownWidth": "10rem"
                                 }' onchange="loadDataTable()">
                           <option value="all" selected>All</option>
-                          <option value="Connected">Connected</option>
-                          <option value="Disconnected">Disconnected</option>
+                          <option value="pending">Waiting for approval</option>
+                          <option value="active">Connected</option>
+                          <option value="revoked">Removed</option>
                         </select>
                       </div>
                       <!-- End Select -->
@@ -151,12 +152,15 @@
             <thead class="thead-light">
               <tr>
                   <th scope="col" class="table-column-pe-0"><input type="checkbox" id="select-all" class="form-check-input"></th>
-                  <th>Device Model</th>
-                  <th>Device Brand</th>
-                  <th>Device Version</th>
-                  <th>Device Api Level</th>
+                  <th>Device</th>
                   <th>Status</th>
-                  <th>Date</th>
+                  <th>Match Code</th>
+                  <th>Last Seen</th>
+                  <th>Received</th>
+                  <th>Saved</th>
+                  <th>Missing</th>
+                  <th>Paired On</th>
+                  <th>Action</th>
               </tr>
             </thead>
             <tbody id="datatable">
@@ -214,69 +218,14 @@
                 <div class="card border-0 shadow-sm mb-4">
                   <div class="card-body">
                     <h2 class="h4 fw-bold text-dark mb-2">Secure phone pairing</h2>
-                    <p class="text-secondary small mb-3">For the SMS Forwarder app. In the app, enter this site's address and the code below. The code works once and expires in 5 minutes.</p>
+                    <p class="text-secondary small mb-3">For the SMS Forwarder app. In the app, enter the code below, then approve the phone in the Devices list. The code works once and expires in 5 minutes.</p>
                     <button type="button" class="btn btn-primary btn-sm" onclick="appDeviceCreateCode()"><i class="bi bi-key me-1"></i> Create pairing code</button>
                     <div id="app-device-code" class="h3 fw-bold mt-3 mb-0" style="letter-spacing: 2px;"></div>
-                    <div id="app-device-list" class="mt-3"></div>
-                  </div>
-                </div>
-
-                <div class="card border-0 shadow-sm mb-4">
-                  <div class="card-body">
-                    <h2 class="h4 fw-bold text-dark mb-2">
-                      Download Android App
-                    </h2>
-                    <p class="text-primary small mb-3">Only for Bangladeshi Users</p>
-                
-                    <p class="text-secondary mb-3">
-                      Download our Android app to automate your personal payments effortlessly:
-                    </p>
-                
-                    <ul class="list-unstyled text-secondary small">
-                      <li class="mb-2 d-flex align-items-start">
-                        <i class="bi bi-check-circle-fill text-success me-2"></i>
-                        <span>Automatically verify your transactions</span>
-                      </li>
-                      <li class="mb-2 d-flex align-items-start">
-                        <i class="bi bi-shield-lock-fill text-info me-2"></i>
-                        <span>Grant necessary permissions for seamless operation</span>
-                      </li>
-                      <li class="mb-2 d-flex align-items-start">
-                        <i class="bi bi-lock-fill text-warning me-2"></i>
-                        <span>Secure background verification of your payments</span>
-                      </li>
-                      <li class="d-flex align-items-start">
-                        <i class="bi bi-eye-fill text-primary me-2"></i>
-                        <span>View verified transactions in the <strong>SMS Data</strong> section</span>
-                      </li>
-                    </ul>
-                    
-                    <center>
-                        <button class="btn btn-warning btn-download-old-app" onclick="triggerDownload('old')"><i class="bi bi-download"></i> Download Old Version App</button><br><br>
-                        <button class="btn btn-primary btn-download-new-app" onclick="triggerDownload('new')"><i class="bi bi-download"></i> Download New Version App</button>
-                    </center>
-                  </div>
-                </div>
-    
-                <div class="card border-0 shadow-sm mb-4">
-                  <div class="card-body">
-                    <h2 class="h4 fw-bold text-dark mb-2">
-                      Connect Android App
-                    </h2>
-
-                    <label for="sitename" class="col-sm-12 col-form-label form-label">Webhook URL</label>
-                    <div class="input-group">
-                         <input type="text" class="form-control" name="webhook-url" id="webhook-url" placeholder="Enter webhook url" aria-label="Enter webhook url" value="https://<?php echo $_SERVER['HTTP_HOST']?>/?webhook=<?php if($global_setting_response['response'][0]['webhook'] !== "--"){echo $global_setting_response['response'][0]['webhook'];}?>" readonly>
-                         <span class="input-group-text" style="cursor:pointer" onclick="copyToClipboard('webhook-url')"><i class="bi bi-clipboard"></i></span>
-                         <span class="input-group-text btn-arrow-repeat" style="cursor:pointer" onclick="generateapi()"><i class="bi bi-arrow-repeat"></i></span>
-                    </div>
-
                   </div>
                 </div>
           </div>
         </div>
-              
-              
+
         <script> 
             function appDevicePost(data, done) {
                 data.csrf_token = window.PP_CSRF_TOKEN || '';
@@ -295,95 +244,15 @@
                 if (operation === 'revoke' && !confirm('Remove this phone? It will stop forwarding immediately.')) {
                     return;
                 }
-                appDevicePost({ action: 'pp_app_device_update', id: id, operation: operation }, appDeviceLoad);
-            }
-
-            function appDeviceLoad() {
-                appDevicePost({ action: 'pp_app_device_list' }, function (result) {
-                    const list = document.getElementById('app-device-list');
-                    list.replaceChildren();
-                    (result.devices || []).forEach(function (device) {
-                        const row = document.createElement('div');
-                        row.className = 'border rounded p-2 mb-2 small';
-
-                        const title = document.createElement('strong');
-                        title.textContent = device.name + ' (' + device.status + ')';
-                        row.appendChild(title);
-
-                        const details = document.createElement('div');
-                        details.textContent = 'Match code ' + device.match_code + ' | Last seen ' + device.last_seen
-                            + ' | Received ' + device.received + ' | Saved ' + device.forwarded + ' | Missing ' + device.missing;
-                        row.appendChild(details);
-
-                        const addButton = function (label, style, operation) {
-                            const button = document.createElement('button');
-                            button.type = 'button';
-                            button.className = 'btn btn-sm mt-1 me-1 ' + style;
-                            button.textContent = label;
-                            button.onclick = function () { appDeviceUpdate(device.id, operation); };
-                            row.appendChild(button);
-                        };
-                        if (device.status === 'pending') { addButton('Approve', 'btn-success', 'approve'); }
-                        if (device.status !== 'revoked') { addButton('Remove', 'btn-outline-danger', 'revoke'); }
-
-                        list.appendChild(row);
-                    });
+                appDevicePost({ action: 'pp_app_device_update', id: id, operation: operation }, function () {
+                    loadDataTable(typeof currentPage === 'number' ? currentPage : 1);
                 });
             }
 
-            document.getElementById('connect-android-app').addEventListener('show.bs.offcanvas', appDeviceLoad);
-
-            function triggerDownload(fileName) {
-                document.querySelector(".btn-download-"+fileName+"-app").innerHTML = '<div class="spinner-border text-light spinner-border-sm" role="status"> <span class="visually-hidden">Loading...</span> </div>';
-            
-                // Create hidden link
-                const link = document.createElement('a');
-                link.href = 'https://<?php echo $_SERVER['HTTP_HOST']?>/admin/sms-data?download=' + encodeURIComponent(fileName);
-                link.download = fileName;
-            
-                // Start download
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            
-                // Hide loading after a few seconds (simulate)
-                setTimeout(() => {
-                    if(fileName == "new"){
-                        document.querySelector(".btn-download-"+fileName+"-app").innerHTML = '<i class="bi bi-download"></i> Download New Version App';
-                    }else{
-                        document.querySelector(".btn-download-"+fileName+"-app").innerHTML = '<i class="bi bi-download"></i> Download Old Version App';
-                    }
-                }, 3000); // Adjust time as needed
-            }
-        
-          function copyToClipboard(inputs) {
-            const input = document.getElementById(inputs);
-            input.select();
-            input.setSelectionRange(0, 99999); 
-        
-            navigator.clipboard.writeText(input.value)
-              .then(() => {
-
-              });
-          }
-        
-            function generateapi(){
-              document.querySelector(".btn-arrow-repeat").innerHTML = '<div class="spinner-border text-primary spinner-border-sm" role="status"> <span class="visually-hidden">Loading...</span> </div>';
-              
-                $.ajax
-                ({
-                    type: "POST",
-                    url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_generate_webhook", "csrf_token": window.PP_CSRF_TOKEN || ''},
-                    success: function (data) {
-                        document.querySelector(".btn-arrow-repeat").innerHTML = '<i class="bi bi-arrow-repeat"></i>';
-                        
-                        var dedata = JSON.parse(data);
-                        
-                        document.querySelector("#webhook-url").value = 'https://<?php echo $_SERVER['HTTP_HOST']?>/?webhook='+dedata.api;
-                    }
-                });
-            }
+            // A phone that paired while this panel was open shows up once it's closed.
+            document.getElementById('connect-android-app').addEventListener('hidden.bs.offcanvas', function () {
+                loadDataTable();
+            });
         </script>
         
         
@@ -459,23 +328,31 @@
                       tbody.append(`
                         <tr>
                           <td><input type="checkbox" class="form-check-input select-box" value="${tx.id || "--"}"></td>
-                          <td>${tx.d_model || "--"}</td>
-                          <td>${tx.d_brand || "--"}</td>
-                          <td>${tx.d_version || "--"}</td>
-                          <td>${tx.d_api_level || "--"}</td>
+                          <td>${tx.name || "--"}</td>
                           <td>
                               ${(() => {
-                                switch (tx.d_status) {
-                                  case 'Connected':
+                                switch (tx.status) {
+                                  case 'active':
                                     return '<span class="badge bg-primary">Connected</span>';
-                                  case 'Disconnected':
-                                    return '<span class="badge bg-danger">Disconnected</span>';
+                                  case 'pending':
+                                    return '<span class="badge bg-warning text-dark">Waiting for approval</span>';
+                                  case 'revoked':
+                                    return '<span class="badge bg-danger">Removed</span>';
                                   default:
                                     return '<span class="badge bg-dark">Unknown</span>';
                                 }
                               })()}
                           </td>
+                          <td>${tx.match_code || "--"}</td>
+                          <td>${tx.last_seen || "--"}</td>
+                          <td>${tx.received}</td>
+                          <td>${tx.forwarded}</td>
+                          <td>${tx.missing}</td>
                           <td>${tx.created_at || "--"}</td>
+                          <td>
+                              ${tx.status === 'pending' ? `<button type="button" class="btn btn-success btn-sm me-1" onclick="appDeviceUpdate(${tx.id}, 'approve')">Approve</button>` : ''}
+                              ${tx.status !== 'revoked' ? `<button type="button" class="btn btn-outline-danger btn-sm" onclick="appDeviceUpdate(${tx.id}, 'revoke')">Remove</button>` : ''}
+                          </td>
                         </tr>
                       `);
                     });

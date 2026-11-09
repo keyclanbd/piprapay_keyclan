@@ -84,6 +84,7 @@ function pp_app_device_list($conn, $prefix) {
             'name' => $row['name'],
             'status' => $row['status'],
             'match_code' => pp_app_device_match_code($row['public_key']),
+            'created_at' => date('Y-m-d H:i:s', (int) $row['created_at']),
             'last_seen' => (int) $row['last_seen'] > 0 ? date('Y-m-d H:i:s', (int) $row['last_seen']) : 'Never',
             'received' => (int) $row['received'],
             'forwarded' => (int) $row['forwarded'],
@@ -93,13 +94,40 @@ function pp_app_device_list($conn, $prefix) {
     return $devices;
 }
 
+// A removed phone can't be approved again. It has to pair again with a new code first.
 function pp_app_device_set_status($conn, $prefix, $id, $operation) {
-    $map = ['approve' => 'active', 'revoke' => 'revoked'];
-    if (!isset($map[$operation])) {
+    if ($operation === 'delete') {
+        $stmt = $conn->prepare("DELETE FROM `{$prefix}app_devices` WHERE id = ?");
+        $stmt->bind_param('i', $id);
+    } elseif ($operation === 'approve') {
+        $stmt = $conn->prepare("UPDATE `{$prefix}app_devices` SET status = 'active' WHERE id = ? AND status = 'pending'");
+        $stmt->bind_param('i', $id);
+    } elseif ($operation === 'revoke') {
+        $stmt = $conn->prepare("UPDATE `{$prefix}app_devices` SET status = 'revoked' WHERE id = ?");
+        $stmt->bind_param('i', $id);
+    } else {
         return false;
     }
-    $stmt = $conn->prepare("UPDATE `{$prefix}app_devices` SET status = ? WHERE id = ?");
-    $stmt->bind_param('si', $map[$operation], $id);
     $stmt->execute();
     return true;
+}
+
+// One page of the admin Devices table. A site has few phones, so filtering here is fine.
+function pp_app_device_table($conn, $prefix, $search, $status, $page) {
+    $limit = 50;
+    $search = mb_strtolower(trim($search));
+    $devices = array_values(array_filter(pp_app_device_list($conn, $prefix), function ($device) use ($search, $status) {
+        return ($status === 'all' || $device['status'] === $status)
+            && ($search === '' || mb_strpos(mb_strtolower($device['name']), $search) !== false);
+    }));
+    $page = max(1, $page);
+    $rows = array_slice($devices, ($page - 1) * $limit, $limit);
+    return [
+        'status' => 'true',
+        'data' => $rows,
+        'total' => count($devices),
+        'showing' => count($rows),
+        'totalPages' => (int) ceil(count($devices) / $limit),
+        'currentPage' => $page,
+    ];
 }

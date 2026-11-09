@@ -3,7 +3,7 @@ if (!defined('pp_allowed_access')) {
     die('Direct access not allowed');
 }
 
-// Sender rules and SMS formats, shared by the legacy webhook and the signed device API.
+// Sender rules and SMS formats, used by the signed device API.
 function pp_sms_provider_senders() {
                         $mfs_providers = [
                             'NAGAD' => 'Nagad',

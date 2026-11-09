@@ -1547,7 +1547,7 @@ if($action == "forgot-password"){
             
             
             
-            if (in_array($action, ['pp_app_device_code', 'pp_app_device_list', 'pp_app_device_update'], true)) {
+            if (in_array($action, ['pp_app_device_code', 'pp_app_device_update', 'pp_sms_data_devices', 'pp_bulk_action_devices'], true)) {
                 if ($mode == "demo") {
                     echo json_encode(["status" => "false", "message" => "Error: Demo mode is active"]);
                     exit();
@@ -1559,8 +1559,14 @@ if($action == "forgot-password"){
 
                 if ($action == "pp_app_device_code") {
                     echo json_encode(["status" => "true", "code" => pp_app_device_create_code($__pp_conn, $db_prefix)]);
-                } elseif ($action == "pp_app_device_list") {
-                    echo json_encode(["status" => "true", "devices" => pp_app_device_list($__pp_conn, $db_prefix)]);
+                } elseif ($action == "pp_sms_data_devices") {
+                    echo json_encode(pp_escape_html_deep(pp_app_device_table($__pp_conn, $db_prefix, (string) ($_POST['search'] ?? ''), (string) ($_POST['sms_status'] ?? 'all'), (int) ($_POST['page'] ?? 1))));
+                } elseif ($action == "pp_bulk_action_devices") {
+                    $ids = array_map('intval', explode(',', (string) ($_POST['ids'] ?? '')));
+                    foreach ($ids as $id) {
+                        pp_app_device_set_status($__pp_conn, $db_prefix, $id, (string) ($_POST['action_name'] ?? ''));
+                    }
+                    echo json_encode(["status" => "true"]);
                 } else {
                     $updated = pp_app_device_set_status($__pp_conn, $db_prefix, (int) ($_POST['id'] ?? 0), (string) ($_POST['operation'] ?? ''));
                     echo json_encode(["status" => $updated ? "true" : "false"]);
@@ -1568,120 +1574,6 @@ if($action == "forgot-password"){
                 exit();
             }
 
-            if($action == "pp_sms_data_devices"){
-                $limit = 50; 
-                $search = escape_string($_POST['search']);
-                $page = isset($_POST['page']) ? intval($_POST['page']) : 1;
-                $offset = ($page - 1) * $limit;
-                
-                $sms_status = escape_string($_POST['sms_status'] ?? '');
-                
-                if($sms_status == "all"){
-                    $sms_status = "";
-                }else{
-                    $sms_status = "AND d_status='".$sms_status."'";
-                }
-                
-                $total = 0;
-                $response = json_decode(getData($db_prefix.'devices',"WHERE d_model LIKE '%$search%' ".$sms_status." OR d_brand LIKE '%$search%' ".$sms_status." OR d_version LIKE '%$search%' ".$sms_status),true);
-                foreach($response['response'] as $res){
-                    $total = $total+1;
-                }
-
-                $totalPages = ceil($total / $limit);
-                
-                $pp_transaction = [];
-                $showing = 0;
-                
-                $response = json_decode(getData($db_prefix.'devices',"WHERE d_model LIKE '%$search%' ".$sms_status." OR d_brand LIKE '%$search%' ".$sms_status." OR d_version LIKE '%$search%' ".$sms_status." ORDER BY 1 DESC LIMIT ".$limit." OFFSET ".$offset),true);
-                foreach($response['response'] as $row){
-                    $showing =$showing+1;
-                    
-                    if($row["d_status"] == "Disconnected"){
-                        $d_status = $row["d_status"];
-                    }else{
-                        if (getConnectionStatus($row["created_at"], 31)) {
-                            $d_status = 'Connected';
-                        } else {
-                            $d_status = 'Disconnected';
-                        }
-                    }
-                    
-                    $pp_transaction[] = [
-                      "id" => $row["id"],
-                      "d_model" => $row["d_model"],
-                      "d_brand" => $row["d_brand"],
-                      "d_version" => $row["d_version"],
-                      "d_api_level" => $row["d_api_level"],
-                      "d_status" => $d_status,
-                      "created_at" => $row["created_at"]
-                    ];
-                }
-                
-                echo json_encode([
-                    "status" => 'true',
-                    "data" => pp_escape_html_deep($pp_transaction),
-                    "total" => $total,
-                    "showing" => $showing,
-                    "totalPages" => $totalPages,
-                    "currentPage" => $page
-                ]);
-            }
-            
-
-            if($action == "pp_bulk_action_devices"){
-                if ($mode == "demo") {
-                    echo json_encode(["status" => "false", "message" => "Error: Demo mode is active"]);
-                    exit();
-                }
-            
-                $ids = escape_string($_POST['ids']);
-                
-                if (!is_array($ids)) {
-                    $ids = explode(",", $ids); 
-                }
-                
-                $ids = array_map('intval', $ids);
-                
-                $count = 0;
-
-                foreach ($ids as $id) {
-                    $action_name = escape_string($_POST['action_name']);
-                    
-                    $response_transaction_checker = json_decode(getData($db_prefix.'devices','WHERE id="'.$id.'"'),true);
-                    if($response_transaction_checker['status'] == true){
-                        $count = 1;
-                            
-                        if($action_name == "delete"){
-                            $condition = "id = '".$id."'"; 
-                            
-                            deleteData($db_prefix."devices", $condition);
-                        }
-
-                        if($action_name == "Connected"){
-                            $columns = ['d_status'];
-                            $values = ['Connected'];
-                            $condition = "id = '".$id."'"; 
-                            
-                            updateData($db_prefix."devices", $columns, $values, $condition);
-                        }
-                        
-                        if($action_name == "review"){
-                            $columns = ['d_status'];
-                            $values = ['Disconnected'];
-                            $condition = "id = '".$id."'"; 
-                            
-                            updateData($db_prefix."devices", $columns, $values, $condition);
-                        }
-                    }
-                }
-    
-                if($count == 0){
-                    echo json_encode(['status' => "false", 'message' => 'Invalid Data']);
-                }else{
-                    echo json_encode(['status' => "true", 'message' => 'Invalid Data']);
-                }
-            }
             
 
 
@@ -1800,38 +1692,6 @@ if($action == "forgot-password"){
                     echo json_encode(['status' => "false", 'message' => 'Invalid Data']);
                 }else{
                     echo json_encode(['status' => "true", 'message' => 'Invalid Data']);
-                }
-            }
-            
-            if($action == "pp_generate_webhook"){
-                if ($mode == "demo") {
-                    echo json_encode(["status" => "false", "message" => "Error: Demo mode is active"]);
-                    exit();
-                }
-                
-                if($global_user_login == true){
-                    try {
-                        $webhook_key = bin2hex(random_bytes(32));
-                    } catch (Exception $e) {
-                        echo json_encode(['status' => "false", 'message' => 'Unable to generate webhook url']);
-                        exit();
-                    }
-
-                    $columns = ['webhook'];
-                    $values = [$webhook_key];
-                    $condition = "id = '1'"; 
-                    $updated = updateData($db_prefix.'settings', $columns, $values, $condition);
-                    
-                    if ($updated) {
-                        pp_notify_admin_activity('webhook_regenerated', 'SMS Webhook Key Regenerated', [
-                            'The old webhook URL stopped working. Update it in the SMS forwarder app.',
-                        ]);
-                        echo json_encode(['status' => "true", 'webhook' => $webhook_key]);
-                    } else {
-                        echo json_encode(['status' => "false", 'message' => 'Unable to save webhook url']);
-                    }
-                }else{
-                    echo json_encode(['status' => "false", 'message' => 'Invalid data']);
                 }
             }
             
