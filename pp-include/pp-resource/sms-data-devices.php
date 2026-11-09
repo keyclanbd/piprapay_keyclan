@@ -213,6 +213,16 @@
           <div class="offcanvas-body" style=" padding: 10px; ">
                 <div class="card border-0 shadow-sm mb-4">
                   <div class="card-body">
+                    <h2 class="h4 fw-bold text-dark mb-2">Secure phone pairing</h2>
+                    <p class="text-secondary small mb-3">For the SMS Forwarder app. In the app, enter this site's address and the code below. The code works once and expires in 5 minutes.</p>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="appDeviceCreateCode()"><i class="bi bi-key me-1"></i> Create pairing code</button>
+                    <div id="app-device-code" class="h3 fw-bold mt-3 mb-0" style="letter-spacing: 2px;"></div>
+                    <div id="app-device-list" class="mt-3"></div>
+                  </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-4">
+                  <div class="card-body">
                     <h2 class="h4 fw-bold text-dark mb-2">
                       Download Android App
                     </h2>
@@ -268,6 +278,61 @@
               
               
         <script> 
+            function appDevicePost(data, done) {
+                data.csrf_token = window.PP_CSRF_TOKEN || '';
+                $.post("https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard", data, function (response) {
+                    done(typeof response === 'string' ? JSON.parse(response) : response);
+                });
+            }
+
+            function appDeviceCreateCode() {
+                appDevicePost({ action: 'pp_app_device_code' }, function (result) {
+                    document.getElementById('app-device-code').textContent = result.code || 'Could not create a code';
+                });
+            }
+
+            function appDeviceUpdate(id, operation) {
+                if (operation === 'revoke' && !confirm('Remove this phone? It will stop forwarding immediately.')) {
+                    return;
+                }
+                appDevicePost({ action: 'pp_app_device_update', id: id, operation: operation }, appDeviceLoad);
+            }
+
+            function appDeviceLoad() {
+                appDevicePost({ action: 'pp_app_device_list' }, function (result) {
+                    const list = document.getElementById('app-device-list');
+                    list.replaceChildren();
+                    (result.devices || []).forEach(function (device) {
+                        const row = document.createElement('div');
+                        row.className = 'border rounded p-2 mb-2 small';
+
+                        const title = document.createElement('strong');
+                        title.textContent = device.name + ' (' + device.status + ')';
+                        row.appendChild(title);
+
+                        const details = document.createElement('div');
+                        details.textContent = 'Match code ' + device.match_code + ' | Last seen ' + device.last_seen
+                            + ' | Received ' + device.received + ' | Saved ' + device.forwarded + ' | Missing ' + device.missing;
+                        row.appendChild(details);
+
+                        const addButton = function (label, style, operation) {
+                            const button = document.createElement('button');
+                            button.type = 'button';
+                            button.className = 'btn btn-sm mt-1 me-1 ' + style;
+                            button.textContent = label;
+                            button.onclick = function () { appDeviceUpdate(device.id, operation); };
+                            row.appendChild(button);
+                        };
+                        if (device.status === 'pending') { addButton('Approve', 'btn-success', 'approve'); }
+                        if (device.status !== 'revoked') { addButton('Remove', 'btn-outline-danger', 'revoke'); }
+
+                        list.appendChild(row);
+                    });
+                });
+            }
+
+            document.getElementById('connect-android-app').addEventListener('show.bs.offcanvas', appDeviceLoad);
+
             function triggerDownload(fileName) {
                 document.querySelector(".btn-download-"+fileName+"-app").innerHTML = '<div class="spinner-border text-light spinner-border-sm" role="status"> <span class="visually-hidden">Loading...</span> </div>';
             

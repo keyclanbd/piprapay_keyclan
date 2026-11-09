@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- The Flutter tool needs this to talk to the app during development. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Debug builds only: lets the emulator reach a local server over plain HTTP. -->
+    <application android:usesCleartextTraffic="true" tools:replace="android:usesCleartextTraffic"/>
+</manifest>

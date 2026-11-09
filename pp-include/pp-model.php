@@ -1547,6 +1547,27 @@ if($action == "forgot-password"){
             
             
             
+            if (in_array($action, ['pp_app_device_code', 'pp_app_device_list', 'pp_app_device_update'], true)) {
+                if ($mode == "demo") {
+                    echo json_encode(["status" => "false", "message" => "Error: Demo mode is active"]);
+                    exit();
+                }
+
+                include_once(__DIR__ . '/pp-app-devices.php');
+                $__pp_conn = connectDatabase();
+                pp_app_devices_ensure_schema($__pp_conn, $db_prefix);
+
+                if ($action == "pp_app_device_code") {
+                    echo json_encode(["status" => "true", "code" => pp_app_device_create_code($__pp_conn, $db_prefix)]);
+                } elseif ($action == "pp_app_device_list") {
+                    echo json_encode(["status" => "true", "devices" => pp_app_device_list($__pp_conn, $db_prefix)]);
+                } else {
+                    $updated = pp_app_device_set_status($__pp_conn, $db_prefix, (int) ($_POST['id'] ?? 0), (string) ($_POST['operation'] ?? ''));
+                    echo json_encode(["status" => $updated ? "true" : "false"]);
+                }
+                exit();
+            }
+
             if($action == "pp_sms_data_devices"){
                 $limit = 50; 
                 $search = escape_string($_POST['search']);
