@@ -114,16 +114,6 @@ The cron job responsible for verifying payments is not running.
 ---
 
 <details>
-<summary>🔌 How to download PipraPay tool app</summary>
-
-**Solution:**  
-1. Downlolad from **PipraPay Tool** App from here. [Download Tool App](https://github.com/PipraPay/PipraPay-Open-Source-Web/blob/main/docs/apps/piprapay-tool.apk).  
-
-</details>
-
----
-
-<details>
 <summary>🔌 PipraPay tool app is not connecting</summary>
 
 **Possible Cause:**  
