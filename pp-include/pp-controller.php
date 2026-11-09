@@ -127,18 +127,8 @@
     // password alone could change gateway numbers by posting straight to the endpoint.
     // The proof matches two_factor_authentication_session_proof() in the 2FA module.
     function pp_admin_two_factor_pending() {
-        global $db_prefix;
-        $conn = connectDatabase();
-
-        $result = mysqli_query($conn, "SELECT plugin_array FROM ".$db_prefix."plugins WHERE plugin_slug = 'two-factor-authentication' AND status = 'active' LIMIT 1");
-        $row = $result ? mysqli_fetch_assoc($result) : null;
-        if (!$row) {
-            return false;
-        }
-
-        $settings = json_decode((string) $row['plugin_array'], true);
-        $secret = is_array($settings) ? (string) ($settings['secret_key'] ?? '') : '';
-        if (!is_array($settings) || ($settings['auth_status'] ?? '') !== 'enable' || $secret === '') {
+        $secret = pp_admin_two_factor_secret();
+        if ($secret === '') {
             return false;
         }
 
@@ -148,6 +138,60 @@
         }
 
         return !hash_equals(hash_hmac('sha256', $session, $secret), (string) ($_COOKIE['pp_two_factor_authentication'] ?? ''));
+    }
+
+    // The authenticator secret, or '' when two-factor authentication is not switched on.
+    function pp_admin_two_factor_secret() {
+        global $db_prefix;
+        $conn = connectDatabase();
+
+        $result = mysqli_query($conn, "SELECT plugin_array FROM ".$db_prefix."plugins WHERE plugin_slug = 'two-factor-authentication' AND status = 'active' LIMIT 1");
+        $row = $result ? mysqli_fetch_assoc($result) : null;
+        $settings = $row ? json_decode((string) $row['plugin_array'], true) : null;
+
+        if (!is_array($settings) || ($settings['auth_status'] ?? '') !== 'enable') {
+            return '';
+        }
+        return (string) ($settings['secret_key'] ?? '');
+    }
+
+    // Checks an authenticator code for a sensitive change. Returns 'ok', 'wrong' or 'locked'.
+    // Attempts are counted per admin in a file, because a stolen session can always start a new PHP session.
+    function pp_check_admin_two_factor_code($secret, $code, $adminId) {
+        $file = __DIR__ . '/../cache/two_factor_attempts.json';
+        $key = 'admin_' . $adminId;
+        $attempts = file_exists($file) ? (json_decode((string) file_get_contents($file), true) ?: []) : [];
+        $entry = $attempts[$key] ?? ['count' => 0, 'first' => time()];
+        if (time() - $entry['first'] > 300) {
+            $entry = ['count' => 0, 'first' => time()];
+        }
+        if ($entry['count'] >= 5) {
+            return 'locked';
+        }
+
+        require_once __DIR__ . '/../pp-content/plugins/modules/two-factor-authentication/vendor-two-factor-authentication/autoload.php';
+        $authenticator = new PHPGangsta_GoogleAuthenticator();
+        $isValid = preg_match('/^[0-9]{6}$/', $code) === 1 && $authenticator->verifyCode($secret, $code, 2);
+
+        if ($isValid) {
+            unset($attempts[$key]);
+        } else {
+            $entry['count']++;
+            $attempts[$key] = $entry;
+        }
+        @mkdir(dirname($file), 0755, true);
+        file_put_contents($file, json_encode($attempts), LOCK_EX);
+
+        if ($isValid) {
+            return 'ok';
+        }
+        if ($entry['count'] === 5) {
+            pp_notify_admin_activity('two_factor_blocked', 'Two-Factor Code Blocked', [
+                'Reason: 5 wrong authenticator codes while changing a protected setting',
+                'If this was not you, change your admin password now.',
+            ]);
+        }
+        return 'wrong';
     }
 
     // Security alert for an admin-side change (login, gateway number, wallet address, API key...).

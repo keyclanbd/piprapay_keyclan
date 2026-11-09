@@ -612,12 +612,30 @@ if($action == "forgot-password"){
                     exit();
                 }
                 
-                $email = escape_string($_POST['email']);
-        
+                $email = escape_string($_POST['email'] ?? '');
+
                 if($email == ""){
                     echo json_encode(['status' => "false", 'message' => 'Fill all required field']);
+                }elseif(filter_var($_POST['email'], FILTER_VALIDATE_EMAIL) === false){
+                    echo json_encode(['status' => "false", 'message' => 'Enter a valid email address']);
                 }else{
                     if($global_user_login == true){
+                        // Password resets go to this address, so changing it needs the authenticator code.
+                        $twoFactorSecret = pp_admin_two_factor_secret();
+                        if ($twoFactorSecret === '') {
+                            echo json_encode(['status' => "false", 'message' => 'Turn on Two-factor authentication first, then change your email address.']);
+                            exit();
+                        }
+                        $twoFactorResult = pp_check_admin_two_factor_code($twoFactorSecret, trim((string) ($_POST['two_factor_code'] ?? '')), $global_user_response['response'][0]['id']);
+                        if ($twoFactorResult === 'locked') {
+                            echo json_encode(['status' => "false", 'message' => 'Too many attempts. Please try again in a few minutes.']);
+                            exit();
+                        }
+                        if ($twoFactorResult !== 'ok') {
+                            echo json_encode(['status' => "false", 'message' => 'Invalid authenticator code. Try again.']);
+                            exit();
+                        }
+
                         $columns = ['email'];
                         $values = [$email];
                         $condition = "id = '".$global_user_response['response'][0]['id']."'"; 

@@ -165,6 +165,7 @@
               </div>
               <!-- End Card -->
         
+              <?php $emailTwoFactorOn = pp_admin_two_factor_secret() !== ''; ?>
               <!-- Card -->
               <div id="emailSection" class="card">
                 <div class="card-header">
@@ -180,15 +181,29 @@
                       <label for="basicemail" class="col-sm-3 col-form-label form-label">New email address</label>
         
                       <div class="col-sm-9">
-                        <input type="email" class="form-control" name="basicemail" id="basicemail" placeholder="Enter new email address" aria-label="Enter new email address">
+                        <input type="email" class="form-control" name="basicemail" id="basicemail" placeholder="Enter new email address" aria-label="Enter new email address" <?php echo $emailTwoFactorOn ? '' : 'disabled'; ?>>
                       </div>
                     </div>
                     <!-- End Form -->
-                    
+
+                    <?php if ($emailTwoFactorOn) { ?>
+                    <!-- Form -->
+                    <div class="row mb-4">
+                      <label for="basicemailcode" class="col-sm-3 col-form-label form-label">Authenticator code</label>
+
+                      <div class="col-sm-9">
+                        <input type="text" class="form-control" name="basicemailcode" id="basicemailcode" placeholder="6-digit code" aria-label="6-digit authenticator code" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+                      </div>
+                    </div>
+                    <!-- End Form -->
+                    <?php } else { ?>
+                    <div class="alert alert-warning" role="alert">Turn on Two-factor authentication before changing your email address. Open the Two-factor authentication module, or activate it in Plugin Manager if it is not listed.</div>
+                    <?php } ?>
+
                     <span class="response-savebasicemail"></span>
-        
+
                     <div class="d-flex justify-content-end">
-                      <button type="submit" class="btn btn-primary btn-savebasicemail" onclick="savebasicemail()">Save changes</button>
+                      <button type="submit" class="btn btn-primary btn-savebasicemail" onclick="savebasicemail()" <?php echo $emailTwoFactorOn ? '' : 'disabled'; ?>>Save changes</button>
                     </div>
                 </div>
                 <!-- End Body -->
@@ -340,6 +355,8 @@
         
           function savebasicemail() {
               var basicemail = document.querySelector("#basicemail").value;
+              var codeField = document.querySelector("#basicemailcode");
+              var twoFactorCode = codeField ? codeField.value : '';
 
               document.querySelector(".btn-savebasicemail").innerHTML = '<div class="spinner-border text-light spinner-border-sm" role="status"> <span class="visually-hidden">Loading...</span> </div>';
               
@@ -347,10 +364,11 @@
                 ({
                     type: "POST",
                     url: "https://<?php echo $_SERVER['HTTP_HOST']?>/admin/dashboard",
-                    data: { "action": "pp_basicemail", "email": basicemail, "csrf_token": window.PP_CSRF_TOKEN || ''},
+                    data: { "action": "pp_basicemail", "email": basicemail, "two_factor_code": twoFactorCode, "csrf_token": window.PP_CSRF_TOKEN || ''},
                     success: function (data) {
                         document.querySelector(".btn-savebasicemail").innerHTML = 'Save changes';
-                        
+                        if (codeField) { codeField.value = ''; }
+
                         var dedata = JSON.parse(data);
                         
                         if(dedata.status == "false"){
