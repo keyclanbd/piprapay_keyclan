@@ -108,8 +108,15 @@ if (file_exists(__DIR__."/pp-config.php")) {
                             'IBBL .' => 'Cellfin',
                             'IPAY' => 'Ipay',
                             'iPAY' => 'Ipay',
-                            'PathaoPay' => 'Pathao Pay'
+                            'PathaoPay' => 'Pathao Pay',
+                            'PUBALI_BANK' => 'Pubali Bank',
+                            'AIBL' => 'Al-Arafah Bank'
                         ];
+
+                        // Sender names can be faked, so these are saved for an admin to check and never
+                        // approved automatically. Only messages matching a format below are kept, which
+                        // leaves out debits, OTPs and offers.
+                        $review_only_providers = ['Pubali Bank', 'Al-Arafah Bank'];
 
                         // Match provider — STRICT by sender only (no text-based matching)
                         $matchFound = false;
@@ -200,7 +207,26 @@ if (file_exists(__DIR__."/pp-config.php")) {
                                         'format' => '/Tk(?<amount>[\d,]+(?:\.\d{1,2})?)\s+credited\s+from\s+card\s+\**(?<mobile>\d+)\.?\s*Fee:Tk\.?(?<fee>[\d,]+(?:\.\d{1,2})?|0)\s*NetBal:Tk(?<balance>[\d,]+(?:\.\d{1,2})?)\s*TxnId:(?<trxid>\d+)\s*Date:(?<datetime>\d{2}-[A-Z]{3}-\d{2}\s+\d{2}:\d{2}:\d{2}\s*(?:am|pm))/i'
                                     ]
                                 ]
-
+,
+                                'Pubali Bank' => [
+                                    // Bangla QR payment, the only bank message with a TrxID
+                                    [
+                                        'type' => 'sms1',
+                                        'format' => '/BDT\s*(?<amount>[\d,]+(?:\.\d{1,2})?)\s+RECEIVED\s+FROM\s+(?<mobile>[\d*]+)\s+TO\s+ACC\s+[\d*]+\s*,.*?USING\s+BANGLA\s+QR.*?TrxID:\s*(?<trxid>\w+)/is'
+                                    ],
+                                    // Fund transfer from another bank, which has no TrxID
+                                    [
+                                        'type' => 'sms2',
+                                        'format' => '/BDT\s*(?<amount>[\d,]+(?:\.\d{1,2})?)\s+has\s+been\s+credited\s+to\s+your\s+account\s+using\s+.+?\s+from\s+(?<mobile>.+?)\s+on\s+\d{2}-[A-Z]{3}-\d{2}\.\s*A\/C\s+Bal:\s*Cr\s*(?<balance>\d[\d,]*(?:\.\d+)?)/is'
+                                    ]
+                                ],
+                                'Al-Arafah Bank' => [
+                                    // Written from the bank's debit message; adjust if a real credit message differs.
+                                    [
+                                        'type' => 'sms1',
+                                        'format' => '/Your\s+A\/C\s+[\d*]+\s+has\s+been\s+Credited\s+by\s+BDT\s*(?<amount>[\d,]+(?:\.\d{1,2})?)\s+on\s+.+?Ref:\s*(?<trxid>\w+)\s+Balance:\s*(?<balance>\d[\d,]*(?:\.\d+)?)/is'
+                                    ]
+                                ]
 
                                 //just basic add as you need.
                             ];
@@ -238,7 +264,11 @@ if (file_exists(__DIR__."/pp-config.php")) {
                                             $matched_data['datetime'] = date('Y-m-d H:i:s', strtotime(str_replace('/', '-', $matches['date']) . ' ' . $matches['time']));
                                         }
 
-                                        $sms_status = "approved";
+                                        if (in_array($matchedFullName, $review_only_providers, true)) {
+                                            $matched_data['datetime'] = getCurrentDatetime('Y-m-d H:i:s');
+                                        } else {
+                                            $sms_status = "approved";
+                                        }
                                         break;
                                     }
                                 }
@@ -267,7 +297,9 @@ if (file_exists(__DIR__."/pp-config.php")) {
                                 $matched_data['datetime']
                             ];
 
-                            insertData($db_prefix . 'sms_data', $columns, $values);
+                            if ($parsed || !in_array($matchedFullName, $review_only_providers, true)) {
+                                insertData($db_prefix . 'sms_data', $columns, $values);
+                            }
                         }
                     }
 
