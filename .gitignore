@@ -20,3 +20,6 @@ pp-content/uploads/gateway-assets/
 
 # Server-generated QR images (runtime cache, never committed)
 pp-external/media/qr-cache/
+
+# The Android app is kept out of the website code
+mobile-app/
