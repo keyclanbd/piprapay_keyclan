@@ -1,5 +1,5 @@
 <?php
-// API for the SMS Forwarder Android app. A phone pairs with a one-time code from the admin,
+// API for the KC Payment Android app. A phone pairs with a one-time code from the admin,
 // and an admin must approve it. After that every request is signed by a private key that
 // never leaves the phone, so there is no shared secret to leak.
 
@@ -218,11 +218,22 @@ try {
     $device = pp_api_authenticate($conn, $prefix, $rawBody);
 
     if ($action === 'status') {
+        if (array_key_exists('paused', $body)) {
+            $paused = $body['paused'] === true ? 1 : 0;
+            $stmt = $conn->prepare("UPDATE `{$prefix}app_devices` SET paused = ? WHERE id = ?");
+            $stmt->bind_param('ii', $paused, $device['id']);
+            $stmt->execute();
+        }
         pp_api_reply(200, [
             'status' => true,
             'device_status' => $device['status'],
             'supported_senders' => array_keys(pp_sms_provider_senders()),
         ]);
+    }
+
+    if ($action === 'disconnect') {
+        pp_app_device_set_status($conn, $prefix, (int) $device['id'], 'revoke');
+        pp_api_reply(200, ['status' => true]);
     }
 
     if ($action === 'sms') {

@@ -113,6 +113,7 @@
                           <option value="all" selected>All</option>
                           <option value="pending">Waiting for approval</option>
                           <option value="active">Connected</option>
+                          <option value="paused">Paused</option>
                           <option value="revoked">Removed</option>
                         </select>
                       </div>
@@ -218,7 +219,7 @@
                 <div class="card border-0 shadow-sm mb-4">
                   <div class="card-body">
                     <h2 class="h4 fw-bold text-dark mb-2">Secure phone pairing</h2>
-                    <p class="text-secondary small mb-3">For the SMS Forwarder app. In the app, enter the code below, then approve the phone in the Devices list. The code works once and expires in 5 minutes.</p>
+                    <p class="text-secondary small mb-3">For the KC Payment app. In the app, enter the code below, then approve the phone in the Devices list. The code works once and expires in 5 minutes.</p>
                     <button type="button" class="btn btn-primary btn-sm" onclick="appDeviceCreateCode()"><i class="bi bi-key me-1"></i> Create pairing code</button>
                     <div id="app-device-code" class="h3 fw-bold mt-3 mb-0" style="letter-spacing: 2px;"></div>
                   </div>
@@ -333,7 +334,7 @@
                               ${(() => {
                                 switch (tx.status) {
                                   case 'active':
-                                    return '<span class="badge bg-primary">Connected</span>';
+                                    return tx.paused ? '<span class="badge bg-secondary">Paused</span>' : '<span class="badge bg-primary">Connected</span>';
                                   case 'pending':
                                     return '<span class="badge bg-warning text-dark">Waiting for approval</span>';
                                   case 'revoked':

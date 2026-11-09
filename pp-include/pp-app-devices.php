@@ -36,6 +36,11 @@ function pp_app_devices_ensure_schema($conn, $prefix) {
         created_at INT NOT NULL,
         INDEX idx_device (device_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Added after the first release, so existing tables need the column too.
+    $column = $conn->query("SHOW COLUMNS FROM `{$prefix}app_devices` LIKE 'paused'");
+    if ($column && $column->num_rows === 0) {
+        $conn->query("ALTER TABLE `{$prefix}app_devices` ADD COLUMN paused TINYINT NOT NULL DEFAULT 0");
+    }
     $done = true;
 }
 
@@ -83,6 +88,7 @@ function pp_app_device_list($conn, $prefix) {
             'id' => (int) $row['id'],
             'name' => $row['name'],
             'status' => $row['status'],
+            'paused' => (int) $row['paused'] === 1,
             'match_code' => pp_app_device_match_code($row['public_key']),
             'created_at' => date('Y-m-d H:i:s', (int) $row['created_at']),
             'last_seen' => (int) $row['last_seen'] > 0 ? date('Y-m-d H:i:s', (int) $row['last_seen']) : 'Never',
@@ -117,7 +123,8 @@ function pp_app_device_table($conn, $prefix, $search, $status, $page) {
     $limit = 50;
     $search = mb_strtolower(trim($search));
     $devices = array_values(array_filter(pp_app_device_list($conn, $prefix), function ($device) use ($search, $status) {
-        return ($status === 'all' || $device['status'] === $status)
+        $shown = $device['status'] === 'active' && $device['paused'] ? 'paused' : $device['status'];
+        return ($status === 'all' || $shown === $status)
             && ($search === '' || mb_strpos(mb_strtolower($device['name']), $search) !== false);
     }));
     $page = max(1, $page);
