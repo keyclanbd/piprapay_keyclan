@@ -23,7 +23,9 @@ require_once __DIR__ . '/lib/bangla-qr-emv.php';
 require_once __DIR__ . '/lib/bangla-qr-codec.php';
 require_once __DIR__ . '/lib/bangla-qr-image.php';
 require_once __DIR__ . '/lib/bangla-qr-decode.php';
+require_once __DIR__ . '/lib/bangla-qr-amounts.php';
 require_once __DIR__ . '/bangla-qr-dynamic-helpers.php';
+require_once __DIR__ . '/functions.php';
 
 if (!function_exists('bangla_qr_dynamic_admin_page')) {
     /**

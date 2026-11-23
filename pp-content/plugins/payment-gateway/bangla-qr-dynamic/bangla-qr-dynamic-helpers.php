@@ -68,6 +68,24 @@ function bangla_qr_dynamic_validate_extra_settings(array $settings)
         return 'Error correction must be one of L, M, Q or H.';
     }
 
+    if (isset($settings['qr_lifetime_minutes'])) {
+        $minutes = (int) $settings['qr_lifetime_minutes'];
+        if ($minutes < 1 || $minutes > 30) {
+            return 'QR lifetime must be between 1 and 30 minutes.';
+        }
+    }
+
+    if (isset($settings['match_grace_minutes'])) {
+        $grace = (int) $settings['match_grace_minutes'];
+        if ($grace < 1 || $grace > 60) {
+            return 'Match grace must be between 1 and 60 minutes.';
+        }
+    }
+
+    if (isset($settings['auto_verify']) && !in_array(strtolower((string) $settings['auto_verify']), array('enable', 'disable'), true)) {
+        return 'Auto verify must be enabled or disabled.';
+    }
+
     return '';
 }
 

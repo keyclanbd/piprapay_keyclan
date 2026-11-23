@@ -42,14 +42,54 @@ if (isset($_POST['bangla-qr-dynamic'])) {
     exit();
 }
 
+if (isset($_POST['bqd-status'])) {
+    // Polled every few seconds while the customer pays. Once the transaction
+    // leaves "initialize" this page is no longer routed here at all, so the
+    // caller treats any non JSON answer as "it changed, reload".
+    header('Content-Type: application/json');
+    $current = pp_get_transation($payment_id);
+    $state = ($current['status'] ?? false) === true
+        ? (string) ($current['response'][0]['transaction_status'] ?? '')
+        : '';
+    echo json_encode(array('status' => 'true', 'transaction_status' => $state));
+    exit();
+}
+
 $payment = pp_calculate_gateway_payment_amount($payment_id, $plugin_slug);
 $payable = ($payment['status'] ?? false) === true
     ? safeNumber($payment['total'] ?? 0)
     : safeNumber($transaction_details['response'][0]['transaction_amount'] ?? 0);
 
 $currency_code = strtoupper((string) ($payment['currency'] ?? ($settings['currency'] ?? 'BDT')));
-$trim_zero_cents = strtolower((string) ($settings['trim_zero_cents'] ?? 'disable')) === 'enable';
-$built = bangla_qr_dynamic_build_payload($settings, $payable, $trim_zero_cents);
+
+// Reserve a payable total that no other live checkout is using. The tag is what
+// lets an incoming bank SMS be matched back to this exact transaction.
+$qr_minutes = max(1, (int) ($settings['qr_lifetime_minutes'] ?? 3));
+$grace_minutes = max(1, (int) ($settings['match_grace_minutes'] ?? 5));
+$claim = bangla_qr_dynamic_claim_amount($payment_id, $payable, $qr_minutes * 60, $grace_minutes * 60);
+
+$amount_locked = ($claim['ok'] ?? false) === true;
+$amount_degraded = ($claim['degraded'] ?? false) === true;
+$qr_expires_at = $amount_locked ? (int) $claim['expires_at'] : 0;
+$claim_error = '';
+
+if ($amount_locked) {
+    $payable = safeNumber($claim['payable']);
+} elseif ($amount_degraded) {
+    // The reservation table is unavailable. The gateway still works, but the
+    // payment has to be confirmed by transaction ID like before.
+    $payable = $payable;
+} else {
+    $claim_error = (string) ($claim['error'] ?? 'This payment is not available.');
+}
+
+// With a reserved amount the tag must survive, so cents are always shown.
+$trim_zero_cents = !$amount_locked
+    && strtolower((string) ($settings['trim_zero_cents'] ?? 'disable')) === 'enable';
+
+$built = $claim_error === ''
+    ? bangla_qr_dynamic_build_payload($settings, $payable, $trim_zero_cents)
+    : array('ok' => false, 'payload' => '', 'error' => $claim_error, 'fields' => array());
 
 $qr_src = '';
 $qr_error = '';
@@ -131,6 +171,11 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .slip-input{display:none}
 .response,.response-slip{display:block;margin-top:10px;font-size:13px;font-weight:600;color:#9B1C2B}
 .footer{text-align:center;font-size:12px;color:var(--muted);margin-top:22px}
+.qr-timer{margin-top:12px;font:600 13px Inter,sans-serif;color:var(--muted);display:inline-flex;gap:7px;align-items:center;background:#F6F7F9;border-radius:999px;padding:7px 13px}
+.qr-timer.low{color:#9B1C2B;background:#FFF4F5}
+.qr-expired{margin-top:14px;display:flex;flex-direction:column;gap:10px;align-items:center;background:#FFF4F5;border:1px solid #FFD5DA;border-radius:14px;padding:18px;font-size:14px;color:#9B1C2B;text-align:center}
+.qr-expired strong{font-size:15px}
+.qr-expired .btn-pay{background:#9B1C2B;margin-top:2px}
 @media(max-width:520px){.qr{width:230px}.main{padding:22px}}
 </style>
 </head>
@@ -151,7 +196,7 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     <div class="scan">
       <?php if ($qr_src !== ''): ?>
         <h2>Scan to Pay</h2>
-        <div class="qr-frame">
+        <div class="qr-frame" id="bqd-qr-wrap">
           <img class="qr" id="bqd-qr-img" src="<?php echo $qr_src; ?>" alt="Payment QR code" data-download="<?php echo htmlspecialchars($qr_download_name); ?>">
           <button type="button" class="qr-dl" id="bqd-qr-dl" aria-label="Download QR code" title="Download QR"><i class="fa-solid fa-download"></i></button>
         </div>
@@ -161,6 +206,14 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
           <?php endif; ?>
           <span class="account-type">Scan with any Bangla QR enabled app. The amount is already filled in.</span>
         </div>
+        <?php if ($amount_locked): ?>
+          <div class="qr-timer" id="bqd-timer"><i class="fa-regular fa-clock"></i> <span id="bqd-timer-text">--:--</span></div>
+          <div class="qr-expired" id="bqd-expired" hidden>
+            <strong>This payment window has closed.</strong>
+            <span>Reload the page to get a fresh QR for the same amount.</span>
+            <button type="button" class="btn-pay" onclick="location.reload()">Reload</button>
+          </div>
+        <?php endif; ?>
         <?php if ($encoded_amount !== '' && abs((float) $encoded_amount - (float) $payable) > 0.004): ?>
           <div class="alert">The QR was generated for <?php echo htmlspecialchars($encoded_amount); ?> but the total is <?php echo htmlspecialchars($display_amount); ?>.</div>
         <?php endif; ?>
@@ -170,7 +223,7 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     </div>
 
     <?php if ($qr_src !== ''): ?>
-    <div class="verify-tabs" role="tablist" aria-label="Verification method">
+    <div class="verify-tabs" id="bqd-verify-wrap" role="tablist" aria-label="Verification method">
       <button type="button" class="verify-tab active" data-pane="trxid-pane" role="tab" aria-selected="true"><i class="fa-solid fa-receipt"></i> Transaction ID</button>
       <button type="button" class="verify-tab" data-pane="slip-pane" role="tab" aria-selected="false"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Receipt</button>
     </div>
@@ -207,6 +260,8 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 (function () {
     var endpoint = <?php echo json_encode(pp_get_paymentlink($payment_id) . '?method=' . $plugin_slug); ?>;
     var paymentId = <?php echo json_encode((string) $payment_id); ?>;
+    var expiresAt = <?php echo (int) $qr_expires_at; ?>;
+    var locked = <?php echo $amount_locked ? 'true' : 'false'; ?>;
 
     var downloadButton = document.getElementById('bqd-qr-dl');
     if (downloadButton) {
@@ -289,8 +344,7 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
         });
     });
 
-    $('#bqd-verify').on('click', function () {
-        var button = this;
+    $('#bqd-verify').on('click', function () {        var button = this;
         var field = $('#bqd-response');
         var trxid = $.trim($('#bqd-trxid').val() || '');
         var pattern = /^[A-Za-z0-9_-]{1,100}$/;
@@ -327,6 +381,72 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
             }
         });
     });
+
+    // ---- Payment window -----------------------------------------------------
+    // The amount is reserved for a short while. Once the QR stops being valid
+    // the page says so instead of letting the customer pay a stale code.
+    var windowOpen = locked;
+    var timerText = document.getElementById('bqd-timer-text');
+    var timerBox = document.getElementById('bqd-timer');
+    var expiredBox = document.getElementById('bqd-expired');
+    var qrWrap = document.getElementById('bqd-qr-wrap');
+    var verifyWrap = document.getElementById('bqd-verify-wrap');
+
+    function closeWindow() {
+        windowOpen = false;
+        if (qrWrap) { qrWrap.style.display = 'none'; }
+        if (verifyWrap) { verifyWrap.style.display = 'none'; }
+        if (timerBox) { timerBox.style.display = 'none'; }
+        if (expiredBox) { expiredBox.hidden = false; }
+    }
+
+    function tick() {
+        if (!locked || !windowOpen) { return; }
+        var left = expiresAt - Math.floor(Date.now() / 1000);
+        if (left <= 0) {
+            closeWindow();
+            return;
+        }
+        if (timerText) {
+            var m = Math.floor(left / 60);
+            var s = left % 60;
+            timerText.textContent = m + ':' + (s < 10 ? '0' + s : s);
+        }
+        if (timerBox && left <= 30) { timerBox.classList.add('low'); }
+        setTimeout(tick, 1000);
+    }
+    tick();
+
+    // ---- Confirmation polling ----------------------------------------------
+    // The bank SMS confirms the payment server side; this just notices it.
+    // Once the transaction leaves "initialize" the payment page no longer routes
+    // here, so a non JSON reply means "it changed, reload".
+    var paymentUrl = <?php echo json_encode(pp_get_paymentlink($payment_id)); ?>;
+    var polling = true;
+
+    function poll() {
+        if (!polling) { return; }
+        $.ajax({
+            type: 'POST',
+            url: endpoint,
+            data: { 'bqd-status': paymentId },
+            success: function (response) {
+                var result = null;
+                try { result = JSON.parse(response); } catch (e) { result = null; }
+                if (!result || result.transaction_status !== 'initialize') {
+                    polling = false;
+                    location.href = paymentUrl;
+                    return;
+                }
+                setTimeout(poll, 5000);
+            },
+            error: function () {
+                // A network blip should not stop the page from checking again.
+                setTimeout(poll, 8000);
+            }
+        });
+    }
+    if (locked) { setTimeout(poll, 5000); }
 })();
 </script>
 </body>

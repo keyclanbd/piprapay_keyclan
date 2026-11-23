@@ -186,8 +186,22 @@ function pp_api_record_message($conn, $prefix, $device, $message) {
         $stmt = $conn->prepare("INSERT INTO `{$prefix}sms_data` (entry_type, sim, payment_method, mobile_number, transaction_id, amount, balance, message, status, created_at) VALUES ('automatic', ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->bind_param('sssssssss', $sim, $parsed['provider'], $data['mobile'], $data['trxid'], $data['amount'], $data['balance'], $stored, $parsed['status'], $data['datetime']);
         $stmt->execute();
+        $smsId = (int) $conn->insert_id;
 
-        return $finish('forwarded', $parsed['status'] === 'approved' ? 'Saved and approved' : 'Saved for admin review');
+        $result = $finish('forwarded', $parsed['status'] === 'approved' ? 'Saved and approved' : 'Saved for admin review');
+
+        // Fired after the commit so a listener can run its own transaction.
+        // A payment that matches an open checkout is confirmed here, while the
+        // customer is still on the page.
+        if ($smsId > 0 && function_exists('pp_trigger_hook')) {
+            try {
+                pp_trigger_hook('pp_sms_received', $smsId);
+            } catch (Throwable $e) {
+                error_log('device-api sms hook: ' . $e->getMessage());
+            }
+        }
+
+        return $result;
     } catch (Throwable $e) {
         $conn->rollback();
         throw $e;

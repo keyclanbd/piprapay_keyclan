@@ -51,6 +51,32 @@ you can confirm the right QR was read.
   rendered as SVG instead.
 * A BDT merchant QR (EMV tag 53 = 050).
 
+== How a payment is confirmed ==
+
+Every checkout is given its own payable total. A tag between 0.10 and 0.99 is
+added to the amount due (for example 1250.00 becomes 1250.37) and reserved in a
+table with a unique index, so two live checkouts can never share the same
+figure, even on the same second.
+
+The QR carries that exact figure. When the bank SMS for it arrives, the amount
+is matched against the reservation and the transaction is completed
+automatically: the invoice is paid, webhooks fire and the usual notifications
+go out. The customer does not type a transaction ID.
+
+Timing:
+
+  QR valid            3 minutes (configurable)
+  Late payment grace  5 more minutes (configurable)
+  After that          the reservation is released and the transaction failed
+
+A payment that arrives after the window, or for an amount nothing was waiting
+for, stays in SMS Data for an admin to review. No money is lost; it is simply
+not attached to an order automatically.
+
+The extra 0.10 to 0.99 is a real credit to the merchant account. Invoices still
+show the amount owed, so settlement reports will differ from the invoice total
+by the gateway fee plus these tags.
+
 == Notes ==
 
 * The uploaded image is only a reference copy. The stored payload is what the
@@ -61,8 +87,11 @@ you can confirm the right QR was read.
   damaged codewords, so a QR photographed at a steep angle, a heavily corrupted
   image, or a badly cropped one may not decode. Paste the payload in that case;
   the gateway reads the payload with the same validation either way.
-* The amount in the QR is taken from the gateway total, including any fixed or
-  percent charge configured for this gateway.
+* Automatic confirmation needs the SMS to reach the site, which means the paired
+  phone must have the bank sender enabled and the cron job configured. Without
+  either, payments fall back to the transaction ID and receipt flow.
+* Automatic confirmation is on by default. Turn it off to require an admin to
+  approve every payment.
 
 == Changelog ==
 

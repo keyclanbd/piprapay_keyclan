@@ -219,6 +219,36 @@ $logo_url = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_d
                     <div class="text-secondary mt-2">How whole amounts appear in the QR.</div>
                   </div>
                 </div>
+
+                <div class="row mb-4">
+                  <div class="col-sm-4">
+                    <label for="qr_lifetime_minutes" class="col-sm-12 col-form-label form-label">QR lifetime</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" name="qr_lifetime_minutes" id="qr_lifetime_minutes" min="1" max="30" value="<?php echo htmlspecialchars((string) ($settings['qr_lifetime_minutes'] ?? '3')); ?>">
+                        <span class="input-group-text">min</span>
+                    </div>
+                    <div class="text-secondary mt-2">How long the QR stays valid after the page loads.</div>
+                  </div>
+                  <div class="col-sm-4">
+                    <label for="match_grace_minutes" class="col-sm-12 col-form-label form-label">Match grace</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" name="match_grace_minutes" id="match_grace_minutes" min="1" max="60" value="<?php echo htmlspecialchars((string) ($settings['match_grace_minutes'] ?? '5')); ?>">
+                        <span class="input-group-text">min</span>
+                    </div>
+                    <div class="text-secondary mt-2">Extra time a late SMS can still confirm the payment.</div>
+                  </div>
+                  <div class="col-sm-4">
+                    <label for="auto_verify" class="col-sm-12 col-form-label form-label">Auto verify from SMS</label>
+                    <div class="input-group">
+                      <select class="form-control" name="auto_verify" id="auto_verify">
+                        <?php $auto = strtolower((string) ($settings['auto_verify'] ?? 'enable')); ?>
+                        <option value="disable" <?php echo $auto === 'disable' ? 'selected' : ''; ?>>Disable</option>
+                        <option value="enable" <?php echo $auto === 'enable' ? 'selected' : ''; ?>>Enable</option>
+                      </select>
+                    </div>
+                    <div class="text-secondary mt-2">Completes a payment when an incoming SMS matches the exact amount.</div>
+                  </div>
+                </div>
             </div>
           </div>
 
