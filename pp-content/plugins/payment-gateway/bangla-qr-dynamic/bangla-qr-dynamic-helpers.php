@@ -11,6 +11,14 @@ if (!defined('pp_allowed_access')) {
     die('Direct access not allowed');
 }
 
+// The core includes this file on its own when saving the gateway settings; it
+// does not load the plugin class, so the libraries used below are pulled in
+// here rather than relying on <slug>-class.php having done it.
+require_once __DIR__ . '/lib/bangla-qr-emv.php';
+require_once __DIR__ . '/lib/bangla-qr-codec.php';
+require_once __DIR__ . '/lib/bangla-qr-image.php';
+require_once __DIR__ . '/lib/bangla-qr-decode.php';
+
 /**
  * ISO 4217 numeric code for a currency, as used by EMV tag 53.
  *
