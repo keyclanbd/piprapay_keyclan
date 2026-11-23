@@ -284,9 +284,23 @@ $logo_url = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_d
                         $('#bqdResponse').removeClass('alert-success').addClass('alert alert-danger mb-3').html(response.message);
                     }
                 },
-                error: function() {
+                error: function(xhr, textStatus) {
                     button.innerHTML = original;
-                    $('#bqdResponse').removeClass('alert-success').addClass('alert alert-danger mb-3').html('An error occurred. Please try again.');
+                    // Show what actually came back. A bare "An error occurred"
+                    // hides whether this is a fatal, a 403 or a timeout.
+                    var detail = 'An error occurred. Please try again.';
+                    if (xhr && xhr.status) {
+                        detail += ' (HTTP ' + xhr.status + ')';
+                    } else if (textStatus) {
+                        detail += ' (' + textStatus + ')';
+                    }
+                    var body = (xhr && xhr.responseText) ? String(xhr.responseText).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '';
+                    if (body) {
+                        detail += '<br><small>' + $('<div>').text(body.slice(0, 300)).html() + '</small>';
+                    } else if (xhr && xhr.status === 500) {
+                        detail += '<br><small>The server stopped while saving. Check the PHP error log for a fatal error.</small>';
+                    }
+                    $('#bqdResponse').removeClass('alert-success').addClass('alert alert-danger mb-3').html(detail);
                 }
             });
         });

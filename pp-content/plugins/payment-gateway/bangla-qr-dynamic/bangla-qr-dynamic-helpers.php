@@ -100,12 +100,36 @@ function bangla_qr_dynamic_validate_extra_settings(array $settings)
 /**
  * Core hook: validate and enrich a gateway settings submission.
  *
+ * Wrapped so that a failure inside the gateway still answers with JSON. The
+ * admin form shows its generic message when the reply is not JSON, which hides
+ * the real cause behind a blank "An error occurred".
+ *
  * @param array $newData         Posted settings.
  * @param array $currentSettings Settings currently stored.
  * @param array $files           Uploaded files ($_FILES).
  * @return array{status:bool, message?:string, settings?:array, notice?:string}
  */
 function bangla_qr_dynamic_prepare_settings($newData, $currentSettings, $files)
+{
+    try {
+        return bangla_qr_dynamic_prepare_settings_run($newData, $currentSettings, $files);
+    } catch (Throwable $e) {
+        error_log('bangla-qr-dynamic settings: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+
+        return array(
+            'status' => false,
+            'message' => 'Settings were not saved. ' . $e->getMessage(),
+        );
+    }
+}
+
+/**
+ * @param array $newData
+ * @param array $currentSettings
+ * @param array $files
+ * @return array{status:bool, message?:string, settings?:array, notice?:string}
+ */
+function bangla_qr_dynamic_prepare_settings_run($newData, $currentSettings, $files)
 {
     $newData = is_array($newData) ? $newData : array();
     $currentSettings = is_array($currentSettings) ? $currentSettings : array();
