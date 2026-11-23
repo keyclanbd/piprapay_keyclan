@@ -17,12 +17,51 @@ function pp_sms_provider_senders() {
                             'iPAY' => 'Ipay',
                             'PathaoPay' => 'Pathao Pay',
                             'PUBALI_BANK' => 'Pubali Bank',
-                            'AIBL' => 'Al-Arafah Bank'
+                            'AIBL' => 'Al-Arafah Bank',
+                            'IW_AIBL' => 'Al-Arafah Bank'
                         ];
     return $mfs_providers;
 }
 
-// Returns null when the sender isn't a known provider.
+/**
+ * Turn a bank timestamp into "Y-m-d H:i:s".
+ *
+ * Bank messages use day-first dates ("15/11/26 20:00"). strtotime reads a
+ * two digit year there as 2015, so day/month/year is parsed explicitly and
+ * anything else falls back to strtotime.
+ *
+ * @param string $value
+ * @param string $fallback
+ * @return string
+ */
+function pp_sms_parse_datetime($value, $fallback) {
+    $value = trim((string) $value);
+
+    if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2}))?$#', $value, $m)) {
+        $day = (int) $m[1];
+        $month = (int) $m[2];
+        $year = (int) $m[3];
+        if (strlen($m[3]) === 2) {
+            $year += 2000;
+        }
+        $hour = isset($m[4]) ? (int) $m[4] : 0;
+        $minute = isset($m[5]) ? (int) $m[5] : 0;
+
+        if ($day >= 1 && $day <= 31 && $month >= 1 && $month <= 12
+            && $hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59
+            && checkdate($month, $day, $year)) {
+            return sprintf('%04d-%02d-%02d %02d:%02d:00', $year, $month, $day, $hour, $minute);
+        }
+    }
+
+    $timestamp = strtotime($value);
+    if ($timestamp === false) {
+        $timestamp = strtotime(str_replace('/', '-', $value));
+    }
+
+    return $timestamp !== false ? date('Y-m-d H:i:s', $timestamp) : $fallback;
+}
+
 function pp_parse_forwarded_sms($from, $text, $receivedStamp) {
     $mfs_providers = pp_sms_provider_senders();
                         // Sender names can be faked, so these are saved for an admin to check and never
@@ -136,9 +175,18 @@ function pp_parse_forwarded_sms($from, $text, $receivedStamp) {
                                     ]
                                 ],
                                 'Al-Arafah Bank' => [
-                                    // Written from the bank's debit message; adjust if a real credit message differs.
+                                    // Bangla QR credit, the format IW_AIBL actually sends:
+                                    // "Bangla QR Payment received TK 210 from 1510101187518,
+                                    //  RRN-631914478427. Balance TK 220.37.
+                                    //  TrxID 42600864131946 at 15/11/26 20:00 IW AIB PLC"
+                                    // The amount may be whole ("TK 210") or have decimals ("TK 10.37").
                                     [
                                         'type' => 'sms1',
+                                        'format' => '/Bangla\s+QR\s+Payment\s+received\s+TK\s+(?<amount>[\d,]+(?:\.\d{1,2})?)\s+from\s+(?<mobile>\d+),?\s*RRN[-:\s]*\d+\.\s*Balance\s+TK\s+(?<balance>[\d,]+(?:\.\d{1,2})?)\.\s*TrxID\s+(?<trxid>[A-Za-z0-9]+)\s+at\s+(?<datetime>\d{2}\/\d{2}\/\d{2,4}\s+\d{1,2}:\d{2})/i'
+                                    ],
+                                    // Plain account credit, kept for AIBL messages that are not QR payments.
+                                    [
+                                        'type' => 'sms2',
                                         'format' => '/Your\s+A\/C\s+[\d*]+\s+has\s+been\s+Credited\s+by\s+BDT\s*(?<amount>[\d,]+(?:\.\d{1,2})?)\s+on\s+.+?Ref:\s*(?<trxid>\w+)\s+Balance:\s*(?<balance>\d[\d,]*(?:\.\d+)?)/is'
                                     ]
                                 ]
@@ -174,9 +222,9 @@ function pp_parse_forwarded_sms($from, $text, $receivedStamp) {
                                         $matched_data['balance'] = str_replace(',', '', $matches['balance'] ?? '0');
 
                                         if (isset($matches['datetime'])) {
-                                            $matched_data['datetime'] = date('Y-m-d H:i:s', strtotime(str_replace('/', '-', $matches['datetime'])));
+                                            $matched_data['datetime'] = pp_sms_parse_datetime($matches['datetime'], $receivedStamp);
                                         } elseif (isset($matches['date']) && isset($matches['time'])) {
-                                            $matched_data['datetime'] = date('Y-m-d H:i:s', strtotime(str_replace('/', '-', $matches['date']) . ' ' . $matches['time']));
+                                            $matched_data['datetime'] = pp_sms_parse_datetime($matches['date'] . ' ' . $matches['time'], $receivedStamp);
                                         }
 
                                         if (in_array($matchedFullName, $review_only_providers, true)) {
