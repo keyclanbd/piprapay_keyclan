@@ -386,6 +386,8 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     // The amount is reserved for a short while. Once the QR stops being valid
     // the page says so instead of letting the customer pay a stale code.
     var windowOpen = locked;
+    var polling = true;
+    var pollCount = 0;
     var timerText = document.getElementById('bqd-timer-text');
     var timerBox = document.getElementById('bqd-timer');
     var expiredBox = document.getElementById('bqd-expired');
@@ -398,6 +400,8 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
         if (verifyWrap) { verifyWrap.style.display = 'none'; }
         if (timerBox) { timerBox.style.display = 'none'; }
         if (expiredBox) { expiredBox.hidden = false; }
+        // An abandoned tab must stop asking the server for status.
+        polling = false;
     }
 
     function tick() {
@@ -422,10 +426,12 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     // Once the transaction leaves "initialize" the payment page no longer routes
     // here, so a non JSON reply means "it changed, reload".
     var paymentUrl = <?php echo json_encode(pp_get_paymentlink($payment_id)); ?>;
-    var polling = true;
 
     function poll() {
-        if (!polling) { return; }
+        if (!polling || !windowOpen) { return; }
+        // Hard cap as well: about nine minutes of polling at most.
+        pollCount++;
+        if (pollCount > 110) { polling = false; return; }
         $.ajax({
             type: 'POST',
             url: endpoint,
