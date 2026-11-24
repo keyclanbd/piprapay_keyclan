@@ -114,10 +114,6 @@ if (($built['ok'] ?? false) === true) {
 
 $encoded_amount = $built['ok'] ? (bqr_parse_emv($built['payload'])['fields']['amount'] ?? '') : '';
 $display_amount = number_format($payable, 2, '.', '');
-$merchant_name = (string) ($settings['account_name'] ?? '');
-if ($merchant_name === '') {
-    $merchant_name = (string) ($settings['merchant_name'] ?? '');
-}
 $qr_download_name = 'bangla-qr-' . preg_replace('/[^0-9.]/', '', $display_amount) . '.png';
 $logo = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_dir'] ?? 'payment-gateway') . '/' . $plugin_slug . '/assets/icon.png';
 $status_url = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_dir'] ?? 'payment-gateway') . '/'
@@ -152,10 +148,6 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .qr-frame{position:relative;display:inline-block;padding:14px;border:1px solid var(--line);border-radius:20px;background:#fff}
 .qr{display:block;width:280px;max-width:100%;height:auto;border-radius:8px}
 .qr-dl{position:absolute;right:-10px;top:-10px;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--green);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(26,26,26,.12)}
-.recipient{display:flex;flex-direction:column;gap:6px;align-items:center;margin:16px 0 4px}
-.recipient strong{font-size:16px}
-.account-name{color:#fff;background:var(--green);border-radius:10px;padding:5px 10px}
-.recipient-name{display:flex;align-items:center;justify-content:center;gap:6px}
 .alert{background:#FFF4F5;color:#9B1C2B;border:1px solid #FFD5DA;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600;margin:14px 0 0}
 .verify-tabs{display:flex;gap:8px;margin:26px 0 16px;background:#F6F7F9;padding:5px;border-radius:14px}
 .verify-tab{flex:1;border:0;background:transparent;padding:10px;border-radius:10px;font:600 13px Inter,sans-serif;color:var(--muted);cursor:pointer}
@@ -180,6 +172,11 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .footer{text-align:center;font-size:12px;color:var(--muted);margin-top:22px}
 .qr-timer{margin-top:12px;font:600 13px Inter,sans-serif;color:var(--muted);display:inline-flex;gap:7px;align-items:center;background:#F6F7F9;border-radius:999px;padding:7px 13px}
 .qr-timer.low{color:#9B1C2B;background:#FFF4F5}
+.qr-status{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:16px;flex-wrap:wrap}
+.qr-status .qr-timer{margin-top:0}
+.qr-status-label{display:inline-flex;align-items:center;gap:8px;font:600 13px Inter,sans-serif;color:var(--muted)}
+.qr-status-label i{color:var(--green)}
+.scan .account-type{display:block;margin-top:12px}
 .qr-expired{margin-top:14px;display:flex;flex-direction:column;gap:10px;align-items:center;background:#FFF4F5;border:1px solid #FFD5DA;border-radius:14px;padding:18px;font-size:14px;color:#9B1C2B;text-align:center}
 .qr-expired strong{font-size:15px}
 .qr-expired .btn-pay{background:#9B1C2B;margin-top:2px}
@@ -207,20 +204,17 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
           <img class="qr" id="bqd-qr-img" src="<?php echo $qr_src; ?>" alt="Payment QR code" data-download="<?php echo htmlspecialchars($qr_download_name); ?>">
           <button type="button" class="qr-dl" id="bqd-qr-dl" aria-label="Download QR code" title="Download QR"><i class="fa-solid fa-download"></i></button>
         </div>
-        <div class="recipient">
-          <?php if ($merchant_name !== ''): ?>
-            <div class="recipient-name"><span class="account-name"><?php echo htmlspecialchars($merchant_name); ?></span></div>
-          <?php endif; ?>
-          <span class="account-type">Scan with any Bangla QR enabled app. The amount is already filled in.</span>
-        </div>
         <?php if ($amount_locked): ?>
-          <div class="qr-timer" id="bqd-timer"><i class="fa-regular fa-clock"></i> <span id="bqd-timer-text">--:--</span></div>
+          <div class="qr-status">
+            <span class="qr-timer" id="bqd-timer"><i class="fa-regular fa-clock"></i> <span id="bqd-timer-text">--:--</span></span>
+            <span class="qr-status-label">Payment Status <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i></span>
+          </div>
           <div class="qr-expired" id="bqd-expired" hidden>
             <strong>This payment window has closed.</strong>
             <span>Already paid? Enter the transaction ID from your payment app, or upload the receipt, below.</span>
-            <button type="button" class="btn-pay" onclick="location.reload()">Show a new QR</button>
           </div>
         <?php endif; ?>
+        <span class="account-type">Scan with any Bangla QR enabled app. The amount is already filled in.</span>
         <?php if ($encoded_amount !== '' && abs((float) $encoded_amount - (float) $payable) > 0.004): ?>
           <div class="alert">The QR was generated for <?php echo htmlspecialchars($encoded_amount); ?> but the total is <?php echo htmlspecialchars($display_amount); ?>.</div>
         <?php endif; ?>
