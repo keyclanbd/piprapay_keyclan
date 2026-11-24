@@ -219,10 +219,10 @@ function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSe
     $expiresAt = $now + $qrSeconds;
     $matchUntil = $now + $qrSeconds + $graceSeconds;
 
-    // 90 tags per base amount. Random order, so two simultaneous checkouts for
-    // the same product rarely collide on the first try.
+    // 90 tags per base amount, taken in order from the lowest, so a checkout
+    // pays as close to the total as possible: 1020.10, then 1020.11, then
+    // 1020.12 for the next one instead of jumping to 1020.87.
     $tags = range(10, 99);
-    shuffle($tags);
 
     foreach ($tags as $cents) {
         $payable = number_format(($baseCents + $cents) / 100, 2, '.', '');
