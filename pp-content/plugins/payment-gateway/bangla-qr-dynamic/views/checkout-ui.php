@@ -178,6 +178,8 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .qr-status-label i{color:var(--green)}
 .scan .account-type{display:block;margin-top:12px}
 .qr-expired{margin-top:14px;display:flex;flex-direction:column;gap:10px;align-items:center;background:#FFF4F5;border:1px solid #FFD5DA;border-radius:14px;padding:18px;font-size:14px;color:#9B1C2B;text-align:center}
+/* display:flex above would otherwise beat the hidden attribute. */
+.qr-expired[hidden]{display:none}
 .qr-expired strong{font-size:15px}
 .qr-expired .btn-pay{background:#9B1C2B;margin-top:2px}
 @media(max-width:520px){.qr{width:230px}.main{padding:22px}}
@@ -209,7 +211,7 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
             <span class="qr-timer" id="bqd-timer"><i class="fa-regular fa-clock"></i> <span id="bqd-timer-text">--:--</span></span>
             <span class="qr-status-label">Payment Status <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i></span>
           </div>
-          <div class="qr-expired" id="bqd-expired" hidden>
+          <div class="qr-expired" id="bqd-expired" style="display:none">
             <strong>This payment window has closed.</strong>
             <span>Already paid? Enter the transaction ID from your payment app, or upload the receipt, below.</span>
           </div>
@@ -411,7 +413,7 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
         if (timerBox) { timerBox.style.display = 'none'; }
         // Now that the QR is gone, offer the two ways to report a payment.
         if (manualBox) { manualBox.style.display = ''; }
-        if (expiredBox) { expiredBox.hidden = false; }
+        if (expiredBox) { expiredBox.style.display = ''; }
         // Polling continues until the match window ends, so a payment that
         // confirms a little late still settles the page on its own.
     }
