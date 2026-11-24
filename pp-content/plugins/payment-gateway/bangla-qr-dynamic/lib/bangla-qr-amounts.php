@@ -181,12 +181,16 @@ function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSe
     $existing = bangla_qr_dynamic_amount_row($conn, $prefix, $ppId);
     if ($existing !== null) {
         if ($existing['status'] === 'open' && (int) $existing['match_until'] >= $now) {
-            // Same amount, fresh window: the customer can retry the payment
-            // without the QR changing under them.
-            $expiresAt = min($now + $qrSeconds, (int) $existing['match_until']);
-            $stmt = $conn->prepare("UPDATE `{$prefix}bqd_amounts` SET expires_at = ? WHERE pp_id = ? AND status = 'open'");
+            // Same amount, full window. The customer gets the configured time
+            // on every page load, not whatever is left of the first one, so the
+            // QR never closes earlier than the setting says. The match window
+            // is carried forward with it; the transaction's own session timeout
+            // still caps the total.
+            $expiresAt = $now + $qrSeconds;
+            $matchUntil = max((int) $existing['match_until'], $now + $qrSeconds + $graceSeconds);
+            $stmt = $conn->prepare("UPDATE `{$prefix}bqd_amounts` SET expires_at = ?, match_until = ? WHERE pp_id = ? AND status = 'open'");
             if ($stmt) {
-                $stmt->bind_param('is', $expiresAt, $ppId);
+                $stmt->bind_param('iis', $expiresAt, $matchUntil, $ppId);
                 try {
                     $stmt->execute();
                 } catch (Throwable $e) {
@@ -199,7 +203,7 @@ function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSe
                 'ok' => true,
                 'payable' => (string) $existing['payable'],
                 'expires_at' => $expiresAt,
-                'match_until' => (int) $existing['match_until'],
+                'match_until' => $matchUntil,
                 'reused' => true,
             );
         }

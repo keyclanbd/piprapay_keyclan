@@ -98,6 +98,35 @@ function bangla_qr_dynamic_validate_extra_settings(array $settings)
 }
 
 /**
+ * Read a whole-number settings value, falling back to the default when the
+ * field is missing, empty or out of range.
+ *
+ * An empty input must not become 0 and then be clamped up to the minimum, which
+ * is how a three minute window could turn into one minute.
+ *
+ * @param array  $settings
+ * @param string $key
+ * @param int    $default
+ * @param int    $min
+ * @param int    $max
+ * @return int
+ */
+function bangla_qr_dynamic_setting_int(array $settings, $key, $default, $min, $max)
+{
+    $raw = $settings[$key] ?? null;
+    if ($raw === null || $raw === '' || !is_numeric($raw)) {
+        return $default;
+    }
+
+    $value = (int) $raw;
+    if ($value < $min || $value > $max) {
+        return $default;
+    }
+
+    return $value;
+}
+
+/**
  * Core hook: validate and enrich a gateway settings submission.
  *
  * Wrapped so that a failure inside the gateway still answers with JSON. The

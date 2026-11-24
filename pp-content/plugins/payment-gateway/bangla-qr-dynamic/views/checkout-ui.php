@@ -64,13 +64,16 @@ $currency_code = strtoupper((string) ($payment['currency'] ?? ($settings['curren
 
 // Reserve a payable total that no other live checkout is using. The tag is what
 // lets an incoming bank SMS be matched back to this exact transaction.
-$qr_minutes = max(1, (int) ($settings['qr_lifetime_minutes'] ?? 3));
-$grace_minutes = max(1, (int) ($settings['match_grace_minutes'] ?? 5));
+$qr_minutes = bangla_qr_dynamic_setting_int($settings, 'qr_lifetime_minutes', 3, 1, 30);
+$grace_minutes = bangla_qr_dynamic_setting_int($settings, 'match_grace_minutes', 5, 1, 60);
 $claim = bangla_qr_dynamic_claim_amount($payment_id, $payable, $qr_minutes * 60, $grace_minutes * 60);
 
 $amount_locked = ($claim['ok'] ?? false) === true;
 $amount_degraded = ($claim['degraded'] ?? false) === true;
 $qr_expires_at = $amount_locked ? (int) $claim['expires_at'] : 0;
+// The browser counts down from this, not from an absolute timestamp, so a
+// wrong device clock cannot make the window shorter than it really is.
+$qr_seconds_left = $amount_locked ? max(0, $qr_expires_at - time()) : 0;
 $claim_error = '';
 
 if ($amount_locked) {
@@ -260,7 +263,8 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 (function () {
     var endpoint = <?php echo json_encode(pp_get_paymentlink($payment_id) . '?method=' . $plugin_slug); ?>;
     var paymentId = <?php echo json_encode((string) $payment_id); ?>;
-    var expiresAt = <?php echo (int) $qr_expires_at; ?>;
+    var secondsLeft = <?php echo (int) $qr_seconds_left; ?>;
+    var startedAt = Date.now();
     var locked = <?php echo $amount_locked ? 'true' : 'false'; ?>;
 
     var downloadButton = document.getElementById('bqd-qr-dl');
@@ -406,7 +410,9 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 
     function tick() {
         if (!locked || !windowOpen) { return; }
-        var left = expiresAt - Math.floor(Date.now() / 1000);
+        // Elapsed time is measured locally; the length of the window comes from
+        // the server, so clock drift between the two cannot shorten it.
+        var left = secondsLeft - Math.floor((Date.now() - startedAt) / 1000);
         if (left <= 0) {
             closeWindow();
             return;
