@@ -136,8 +136,9 @@ $site_name = (string) ($setting['response'][0]['site_name'] ?? '');
 *{box-sizing:border-box}
 body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .page{width:min(620px,calc(100% - 32px));margin:34px auto 48px;background:#fff;border-radius:24px;padding:0 20px 24px;box-shadow:0 14px 40px rgba(26,26,26,.06)}
-.top{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:18px 20px 0;margin-bottom:24px}
+.top{display:grid;grid-template-columns:88px 1fr 88px;align-items:center;gap:12px;padding:18px 20px 0;margin-bottom:24px}
 .top img{height:44px;justify-self:center}
+.top .back{justify-self:start}
 .back{width:auto;height:auto;padding:0;border:0;background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:7px;font:600 14px Inter,sans-serif}
 .back i{font-size:18px}
 .card{background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:0 14px 40px rgba(26,26,26,.06)}
