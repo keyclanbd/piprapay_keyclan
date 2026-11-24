@@ -176,7 +176,6 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .qr-status .qr-timer{margin-top:0}
 .qr-status-label{display:inline-flex;align-items:center;gap:8px;font:600 13px Inter,sans-serif;color:var(--muted)}
 .qr-status-label i{color:var(--green)}
-.scan .account-type{display:block;margin-top:12px}
 .qr-expired{margin-top:14px;display:flex;flex-direction:column;gap:10px;align-items:center;background:#FFF4F5;border:1px solid #FFD5DA;border-radius:14px;padding:18px;font-size:14px;color:#9B1C2B;text-align:center}
 /* display:flex above would otherwise beat the hidden attribute. */
 .qr-expired[hidden]{display:none}
@@ -216,7 +215,6 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
             <span>Already paid? Enter the transaction ID from your payment app, or upload the receipt, below.</span>
           </div>
         <?php endif; ?>
-        <span class="account-type">Scan with any Bangla QR enabled app. The amount is already filled in.</span>
         <?php if ($encoded_amount !== '' && abs((float) $encoded_amount - (float) $payable) > 0.004): ?>
           <div class="alert">The QR was generated for <?php echo htmlspecialchars($encoded_amount); ?> but the total is <?php echo htmlspecialchars($display_amount); ?>.</div>
         <?php endif; ?>
