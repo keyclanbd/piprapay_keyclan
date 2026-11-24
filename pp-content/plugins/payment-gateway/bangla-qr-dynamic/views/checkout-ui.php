@@ -200,13 +200,13 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
   <section class="card main">
     <div class="scan">
       <?php if ($qr_src !== ''): ?>
-        <h2>Scan to Pay</h2>
+        <h2 id="bqd-scan-title">Scan to Pay</h2>
         <div class="qr-frame" id="bqd-qr-wrap">
           <img class="qr" id="bqd-qr-img" src="<?php echo $qr_src; ?>" alt="Payment QR code" data-download="<?php echo htmlspecialchars($qr_download_name); ?>">
           <button type="button" class="qr-dl" id="bqd-qr-dl" aria-label="Download QR code" title="Download QR"><i class="fa-solid fa-download"></i></button>
         </div>
         <?php if ($amount_locked): ?>
-          <div class="qr-status">
+          <div class="qr-status" id="bqd-status-row">
             <span class="qr-timer" id="bqd-timer"><i class="fa-regular fa-clock"></i> <span id="bqd-timer-text">--:--</span></span>
             <span class="qr-status-label">Payment Status <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i></span>
           </div>
@@ -402,12 +402,18 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     var timerBox = document.getElementById('bqd-timer');
     var expiredBox = document.getElementById('bqd-expired');
     var qrWrap = document.getElementById('bqd-qr-wrap');
+    var scanTitle = document.getElementById('bqd-scan-title');
+    var statusRow = document.getElementById('bqd-status-row');
     var verifyWrap = document.getElementById('bqd-verify-wrap');
     var manualBox = document.getElementById('bqd-manual');
 
     function closeWindow() {
         windowOpen = false;
         if (qrWrap) { qrWrap.style.display = 'none'; }
+        // The heading and the countdown row describe a QR that is no longer
+        // there, so they go with it.
+        if (scanTitle) { scanTitle.style.display = 'none'; }
+        if (statusRow) { statusRow.style.display = 'none'; }
         if (timerBox) { timerBox.style.display = 'none'; }
         // Now that the QR is gone, offer the two ways to report a payment.
         if (manualBox) { manualBox.style.display = ''; }
