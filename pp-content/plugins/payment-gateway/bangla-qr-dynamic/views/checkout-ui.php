@@ -73,6 +73,9 @@ $qr_expires_at = $amount_locked ? (int) $claim['expires_at'] : 0;
 // The browser counts down from this, not from an absolute timestamp, so a
 // wrong device clock cannot make the window shorter than it really is.
 $qr_seconds_left = $amount_locked ? max(0, $qr_expires_at - time()) : 0;
+// Automatic confirmation keeps listening after the QR stops being valid, so a
+// payment made just before the deadline still confirms itself.
+$match_seconds_left = $amount_locked ? max(0, (int) ($claim['match_until'] ?? 0) - time()) : 0;
 $claim_error = '';
 
 if ($amount_locked) {
@@ -214,8 +217,8 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
           <div class="qr-timer" id="bqd-timer"><i class="fa-regular fa-clock"></i> <span id="bqd-timer-text">--:--</span></div>
           <div class="qr-expired" id="bqd-expired" hidden>
             <strong>This payment window has closed.</strong>
-            <span>Reload the page to get a fresh QR for the same amount.</span>
-            <button type="button" class="btn-pay" onclick="location.reload()">Reload</button>
+            <span>Already paid? Enter the transaction ID from your payment app, or upload the receipt, below.</span>
+            <button type="button" class="btn-pay" onclick="location.reload()">Show a new QR</button>
           </div>
         <?php endif; ?>
         <?php if ($encoded_amount !== '' && abs((float) $encoded_amount - (float) $payable) > 0.004): ?>
@@ -226,7 +229,6 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
       <?php endif; ?>
     </div>
 
-    <?php if ($qr_src !== ''): ?>
     <div class="verify-tabs" id="bqd-verify-wrap" role="tablist" aria-label="Verification method">
       <button type="button" class="verify-tab active" data-pane="trxid-pane" role="tab" aria-selected="true"><i class="fa-solid fa-receipt"></i> Transaction ID</button>
       <button type="button" class="verify-tab" data-pane="slip-pane" role="tab" aria-selected="false"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Receipt</button>
@@ -253,7 +255,6 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
       <span class="response-slip" id="bqd-slip-response" aria-live="polite"></span>
       <button class="btn-pay" type="button" id="bqd-slip-submit"><i class="fa-solid fa-cloud-arrow-up"></i>&nbsp; Upload Receipt</button>
     </div>
-    <?php endif; ?>
   </section>
 
   <footer class="footer">Secure payment verification &middot; Powered by <strong>KeyClan</strong></footer>
@@ -262,9 +263,12 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
 <script>
 (function () {
-    var endpoint = <?php echo json_encode(pp_get_paymentlink($payment_id) . '?method=' . $plugin_slug); ?>;
+    // ppstatus makes the core still route a transaction that already moved to
+    // failed back here, so a late receipt or transaction ID can still be taken.
+    var endpoint = <?php echo json_encode(pp_get_paymentlink($payment_id) . '?method=' . $plugin_slug . '&ppstatus=1'); ?>;
     var paymentId = <?php echo json_encode((string) $payment_id); ?>;
     var secondsLeft = <?php echo (int) $qr_seconds_left; ?>;
+    var matchSeconds = <?php echo (int) $match_seconds_left; ?>;
     var startedAt = Date.now();
     var locked = <?php echo $amount_locked ? 'true' : 'false'; ?>;
 
@@ -402,11 +406,12 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     function closeWindow() {
         windowOpen = false;
         if (qrWrap) { qrWrap.style.display = 'none'; }
-        if (verifyWrap) { verifyWrap.style.display = 'none'; }
         if (timerBox) { timerBox.style.display = 'none'; }
+        // The transaction-ID and receipt forms stay available: the customer may
+        // have paid just before the window closed.
         if (expiredBox) { expiredBox.hidden = false; }
-        // An abandoned tab must stop asking the server for status.
-        polling = false;
+        // Polling continues until the match window ends, so a payment that
+        // confirms a little late still settles the page on its own.
     }
 
     function tick() {
@@ -437,10 +442,12 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     var statusUrl = <?php echo json_encode($status_url); ?>;
 
     function poll() {
-        if (!polling || !windowOpen) { return; }
-        // Hard cap as well: about nine minutes of polling at most.
-        pollCount++;
-        if (pollCount > 110) { polling = false; return; }
+        if (!polling) { return; }
+        // Stop once the server will no longer match anything to this payment.
+        if (Math.floor((Date.now() - startedAt) / 1000) > matchSeconds) {
+            polling = false;
+            return;
+        }
         $.ajax({
             type: 'GET',
             url: statusUrl,

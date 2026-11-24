@@ -73,6 +73,11 @@ A payment that arrives after the window, or for an amount nothing was waiting
 for, stays in SMS Data for an admin to review. No money is lost; it is simply
 not attached to an order automatically.
 
+When the QR window closes the page does not dead-end. The transaction ID and
+receipt forms stay on screen, so a payment made just before the deadline can
+still be reported, and they keep working even after the transaction has been
+marked failed.
+
 The extra 0.10 to 0.99 is a real credit to the merchant account. Invoices still
 show the amount owed, so settlement reports will differ from the invoice total
 by the gateway fee plus these tags.
