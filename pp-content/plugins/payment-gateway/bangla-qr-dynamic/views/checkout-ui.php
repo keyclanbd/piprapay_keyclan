@@ -43,9 +43,8 @@ if (isset($_POST['bangla-qr-dynamic'])) {
 }
 
 if (isset($_POST['bqd-status'])) {
-    // Polled every few seconds while the customer pays. Once the transaction
-    // leaves "initialize" this page is no longer routed here at all, so the
-    // caller treats any non JSON answer as "it changed, reload".
+    // Kept for a page that was already open when this changed hands. Polling
+    // now uses status.php, which cannot answer with HTML.
     header('Content-Type: application/json');
     $current = pp_get_transation($payment_id);
     $state = ($current['status'] ?? false) === true
@@ -118,6 +117,8 @@ if ($merchant_name === '') {
 }
 $qr_download_name = 'bangla-qr-' . preg_replace('/[^0-9.]/', '', $display_amount) . '.png';
 $logo = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_dir'] ?? 'payment-gateway') . '/' . $plugin_slug . '/assets/icon.png';
+$status_url = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_dir'] ?? 'payment-gateway') . '/'
+    . $plugin_slug . '/status.php?id=' . rawurlencode((string) $payment_id);
 $site_name = (string) ($setting['response'][0]['site_name'] ?? '');
 ?>
 <!DOCTYPE html>
@@ -429,9 +430,11 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 
     // ---- Confirmation polling ----------------------------------------------
     // The bank SMS confirms the payment server side; this just notices it.
-    // Once the transaction leaves "initialize" the payment page no longer routes
-    // here, so a non JSON reply means "it changed, reload".
+    // It asks a small endpoint that always answers JSON: the payment page itself
+    // replies with HTML for a dozen different reasons, and treating that as
+    // "payment finished" sent customers back to the checkout mid-payment.
     var paymentUrl = <?php echo json_encode(pp_get_paymentlink($payment_id)); ?>;
+    var statusUrl = <?php echo json_encode($status_url); ?>;
 
     function poll() {
         if (!polling || !windowOpen) { return; }
@@ -439,13 +442,15 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
         pollCount++;
         if (pollCount > 110) { polling = false; return; }
         $.ajax({
-            type: 'POST',
-            url: endpoint,
-            data: { 'bqd-status': paymentId },
-            success: function (response) {
-                var result = null;
-                try { result = JSON.parse(response); } catch (e) { result = null; }
-                if (!result || result.transaction_status !== 'initialize') {
+            type: 'GET',
+            url: statusUrl,
+            dataType: 'json',
+            cache: false,
+            success: function (result) {
+                // Only a status the server actually reported moves the customer.
+                if (result && result.status === true
+                    && result.transaction_status
+                    && result.transaction_status !== 'initialize') {
                     polling = false;
                     location.href = paymentUrl;
                     return;
@@ -453,7 +458,7 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
                 setTimeout(poll, 5000);
             },
             error: function () {
-                // A network blip should not stop the page from checking again.
+                // A failed check is not a payment failure: keep waiting.
                 setTimeout(poll, 8000);
             }
         });
