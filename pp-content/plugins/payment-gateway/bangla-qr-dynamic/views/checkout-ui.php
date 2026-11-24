@@ -229,6 +229,12 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
       <?php endif; ?>
     </div>
 
+    <?php
+    // While the QR is live the customer should scan, not type. The manual forms
+    // appear only when the window closes, or straight away when there is no QR.
+    $manual_hidden = $amount_locked && $qr_src !== '';
+    ?>
+    <div id="bqd-manual"<?php echo $manual_hidden ? ' style="display:none"' : ''; ?>>
     <div class="verify-tabs" id="bqd-verify-wrap" role="tablist" aria-label="Verification method">
       <button type="button" class="verify-tab active" data-pane="trxid-pane" role="tab" aria-selected="true"><i class="fa-solid fa-receipt"></i> Transaction ID</button>
       <button type="button" class="verify-tab" data-pane="slip-pane" role="tab" aria-selected="false"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Receipt</button>
@@ -254,6 +260,7 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
       </div>
       <span class="response-slip" id="bqd-slip-response" aria-live="polite"></span>
       <button class="btn-pay" type="button" id="bqd-slip-submit"><i class="fa-solid fa-cloud-arrow-up"></i>&nbsp; Upload Receipt</button>
+    </div>
     </div>
   </section>
 
@@ -402,13 +409,14 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     var expiredBox = document.getElementById('bqd-expired');
     var qrWrap = document.getElementById('bqd-qr-wrap');
     var verifyWrap = document.getElementById('bqd-verify-wrap');
+    var manualBox = document.getElementById('bqd-manual');
 
     function closeWindow() {
         windowOpen = false;
         if (qrWrap) { qrWrap.style.display = 'none'; }
         if (timerBox) { timerBox.style.display = 'none'; }
-        // The transaction-ID and receipt forms stay available: the customer may
-        // have paid just before the window closed.
+        // Now that the QR is gone, offer the two ways to report a payment.
+        if (manualBox) { manualBox.style.display = ''; }
         if (expiredBox) { expiredBox.hidden = false; }
         // Polling continues until the match window ends, so a payment that
         // confirms a little late still settles the page on its own.
