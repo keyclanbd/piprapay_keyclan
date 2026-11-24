@@ -64,7 +64,7 @@ $currency_code = strtoupper((string) ($payment['currency'] ?? ($settings['curren
 // Reserve a payable total that no other live checkout is using. The tag is what
 // lets an incoming bank SMS be matched back to this exact transaction.
 $qr_minutes = bangla_qr_dynamic_setting_int($settings, 'qr_lifetime_minutes', 3, 1, 30);
-$grace_minutes = bangla_qr_dynamic_setting_int($settings, 'match_grace_minutes', 5, 1, 60);
+$grace_minutes = bangla_qr_dynamic_setting_int($settings, 'match_grace_minutes', 2, 1, 60);
 $claim = bangla_qr_dynamic_claim_amount($payment_id, $payable, $qr_minutes * 60, $grace_minutes * 60);
 
 $amount_locked = ($claim['ok'] ?? false) === true;

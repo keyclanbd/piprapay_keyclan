@@ -66,7 +66,7 @@ go out. The customer does not type a transaction ID.
 Timing:
 
   QR valid            3 minutes (configurable)
-  Late payment grace  5 more minutes (configurable)
+  Late payment grace  2 more minutes (configurable)
   After that          the reservation is released and the transaction failed
 
 A payment that arrives after the window, or for an amount nothing was waiting

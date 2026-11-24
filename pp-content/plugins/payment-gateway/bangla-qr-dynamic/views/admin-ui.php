@@ -232,7 +232,7 @@ $logo_url = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_d
                   <div class="col-sm-4">
                     <label for="match_grace_minutes" class="col-sm-12 col-form-label form-label">Match grace</label>
                     <div class="input-group">
-                        <input type="number" class="form-control" name="match_grace_minutes" id="match_grace_minutes" min="1" max="60" value="<?php echo htmlspecialchars((string) ($settings['match_grace_minutes'] ?? '5')); ?>">
+                        <input type="number" class="form-control" name="match_grace_minutes" id="match_grace_minutes" min="1" max="60" value="<?php echo htmlspecialchars((string) ($settings['match_grace_minutes'] ?? '2')); ?>">
                         <span class="input-group-text">min</span>
                     </div>
                     <div class="text-secondary mt-2">Extra time a late SMS can still confirm the payment.</div>
