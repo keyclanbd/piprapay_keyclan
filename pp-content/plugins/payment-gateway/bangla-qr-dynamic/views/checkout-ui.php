@@ -104,7 +104,9 @@ if (($built['ok'] ?? false) === true) {
             $built['payload'],
             (string) ($settings['error_correction'] ?? 'M')
         );
-        $qr_src = bqr_render_data_uri($matrix, (int) ($settings['qr_scale'] ?? 8), 4);
+        // Two modules of quiet zone: the white frame around it supplies the
+        // rest, so the code does not sit in a fat white band.
+        $qr_src = bqr_render_data_uri($matrix, (int) ($settings['qr_scale'] ?? 8), 2);
     } catch (Throwable $e) {
         $qr_error = 'The payment QR could not be generated.';
     }
@@ -145,9 +147,11 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .main{padding:30px;border-radius:0 0 16px 16px;border-top:0}
 .scan{text-align:center}
 .scan h2{font-size:16px;font-weight:700;margin:0 0 14px}
-.qr-frame{position:relative;display:inline-block;padding:14px;border:1px solid var(--line);border-radius:20px;background:#fff}
-.qr{display:block;width:280px;max-width:100%;height:auto;border-radius:8px}
-.qr-dl{position:absolute;right:-10px;top:-10px;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--green);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(26,26,26,.12)}
+.qr-frame{position:relative;width:220px;height:220px;margin:0 auto;padding:6px}
+/* Four corner brackets, the same frame the manual gateway draws. */
+.qr-frame:before{content:'';position:absolute;z-index:2;inset:0;pointer-events:none;background:linear-gradient(var(--green),var(--green)) top left/18px 3px no-repeat,linear-gradient(var(--green),var(--green)) top left/3px 18px no-repeat,linear-gradient(var(--green),var(--green)) top right/18px 3px no-repeat,linear-gradient(var(--green),var(--green)) top right/3px 18px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/18px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/3px 18px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/18px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/3px 18px no-repeat}
+.qr{position:relative;z-index:1;display:block;width:208px;height:208px;max-width:100%;margin:auto;padding:0;border:0;border-radius:0;box-shadow:none;background:#fff}
+.qr-dl{position:absolute;z-index:3;right:-14px;bottom:-14px;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--green);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(26,26,26,.12)}
 .alert{background:#FFF4F5;color:#9B1C2B;border:1px solid #FFD5DA;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600;margin:14px 0 0}
 .verify-tabs{display:flex;gap:8px;margin:26px 0 16px;background:#F6F7F9;padding:5px;border-radius:14px}
 .verify-tab{flex:1;border:0;background:transparent;padding:10px;border-radius:10px;font:600 13px Inter,sans-serif;color:var(--muted);cursor:pointer}
@@ -181,7 +185,7 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .qr-expired[hidden]{display:none}
 .qr-expired strong{font-size:15px}
 .qr-expired .btn-pay{background:#9B1C2B;margin-top:2px}
-@media(max-width:520px){.qr{width:230px}.main{padding:22px}}
+@media(max-width:520px){.qr-frame{width:180px;height:180px}.qr{width:168px;height:168px}.qr-frame:before{background:linear-gradient(var(--green),var(--green)) top left/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) top left/3px 15px no-repeat,linear-gradient(var(--green),var(--green)) top right/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) top right/3px 15px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/3px 15px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/3px 15px no-repeat}.main{padding:22px}}
 </style>
 </head>
 <body>
