@@ -21,11 +21,32 @@ if (isset($_POST['bangla-qr-dynamic-slip'])) {
     exit();
 }
 
+if (isset($_POST['bqd-leave'])) {
+    // The customer is heading back to pick a gateway. Free the reserved amount
+    // now: left open, the cron would fail the whole transaction when the match
+    // window ends, and a failed transaction cannot be paid by another gateway.
+    header('Content-Type: application/json');
+    $current = pp_get_transation($payment_id);
+    if (($current['status'] ?? false) === true
+        && ($current['response'][0]['transaction_status'] ?? '') === 'initialize') {
+        try {
+            bangla_qr_dynamic_release_amount(connectDatabase(), $GLOBALS['db_prefix'], (string) $payment_id, 'expired');
+        } catch (Throwable $e) {
+            error_log('bangla-qr-dynamic leave: ' . $e->getMessage());
+        }
+    }
+    echo json_encode(array('status' => 'true'));
+    exit();
+}
+
 if (isset($_POST['bangla-qr-dynamic'])) {
     header('Content-Type: application/json');
-    $trx = trim((string) ($_POST['trxid'] ?? ''));
-    if (!preg_match('/^[A-Za-z0-9_-]{1,100}$/', $trx)) {
-        echo json_encode(array('status' => 'false', 'message' => 'Enter the transaction ID shown in your payment app (letters and numbers only).'));
+    // The number of the account the customer paid from: a bKash or Nagad
+    // wallet, a bank account, and so on. Spaces and dashes are only formatting.
+    $account = preg_replace('/[\s-]+/', '', (string) ($_POST['account'] ?? ''));
+    $account = ltrim($account, '+');
+    if (!preg_match('/^[0-9]{6,20}$/', $account)) {
+        echo json_encode(array('status' => 'false', 'message' => 'Enter the account or wallet number you paid from (digits only).'));
         exit();
     }
 
@@ -34,10 +55,12 @@ if (isset($_POST['bangla-qr-dynamic'])) {
         exit();
     }
 
-    if (pp_set_transaction_byid($payment_id, $plugin_slug, $plugin_info['plugin_name'], $trx, $trx, 'pending')) {
+    // There is no transaction ID to record, so the account number doubles as
+    // the reference the admin looks the payment up by.
+    if (pp_set_transaction_byid($payment_id, $plugin_slug, $plugin_info['plugin_name'], $account, $account, 'pending')) {
         echo json_encode(array('status' => 'true', 'message' => 'Payment submitted for review'));
     } else {
-        echo json_encode(array('status' => 'false', 'message' => 'Unable to submit this transaction ID. Please try again.'));
+        echo json_encode(array('status' => 'false', 'message' => 'Unable to submit this account number. Please try again.'));
     }
     exit();
 }
@@ -98,11 +121,15 @@ $built = $claim_error === ''
 
 $qr_src = '';
 $qr_error = '';
+// The Bangla QR logo sits over the centre of the code, so the code needs enough
+// error correction to read through it. H recovers 30% of the modules; the logo
+// covers about 5%.
+$qr_level = 'H';
 if (($built['ok'] ?? false) === true) {
     try {
         $matrix = BqrQrEncoder::encode(
             $built['payload'],
-            (string) ($settings['error_correction'] ?? 'M')
+            $qr_level
         );
         // Two modules of quiet zone: the white frame around it supplies the
         // rest, so the code does not sit in a fat white band.
@@ -147,11 +174,30 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .price{font-size:36px;font-weight:800;letter-spacing:-1.5px;margin-top:4px}
 .main{padding:30px;border-radius:0 0 16px 16px;border-top:0}
 .scan{text-align:center}
-.scan h2{font-size:16px;font-weight:700;margin:0 0 14px}
-.qr-frame{position:relative;width:220px;height:220px;margin:0 auto;padding:6px}
+.scan h2{font-size:22px;font-weight:700;margin:0 0 10px;letter-spacing:-.3px}
+.steps{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:0 0 20px;font-size:15px;color:var(--muted)}
+.steps i{font-size:13px;color:var(--ink)}
+.qr-frame{position:relative;width:272px;height:272px;margin:0 auto;padding:6px}
 /* Four corner brackets, the same frame the manual gateway draws. */
 .qr-frame:before{content:'';position:absolute;z-index:2;inset:0;pointer-events:none;background:linear-gradient(var(--green),var(--green)) top left/18px 3px no-repeat,linear-gradient(var(--green),var(--green)) top left/3px 18px no-repeat,linear-gradient(var(--green),var(--green)) top right/18px 3px no-repeat,linear-gradient(var(--green),var(--green)) top right/3px 18px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/18px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/3px 18px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/18px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/3px 18px no-repeat}
-.qr{position:relative;z-index:1;display:block;width:208px;height:208px;max-width:100%;margin:auto;padding:0;border:0;border-radius:0;box-shadow:none;background:#fff}
+.qr{position:relative;z-index:1;display:block;width:260px;height:260px;max-width:100%;margin:auto;padding:0;border:0;border-radius:0;box-shadow:none;background:#fff}
+.qr-logo{position:absolute;z-index:2;left:50%;top:50%;width:52px;height:auto;transform:translate(-50%,-50%);background:#fff;padding:3px 4px;pointer-events:none}
+.qr,.qr-logo{transition:filter .5s ease,opacity .4s ease}
+.qr-tick{position:absolute;z-index:4;left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;background:#1E8E3E;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(30,142,62,.35);opacity:0;transform:scale(.3);pointer-events:none}
+.qr-tick svg{width:44px;height:44px}
+.qr-tick path{fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40}
+/* Payment confirmed: the code blurs out and a tick pops in over it. */
+.qr-frame.verified .qr{filter:blur(5px);opacity:.55}
+.qr-frame.verified .qr-logo,.qr-frame.verified .qr-dl{opacity:0}
+.qr-frame.verified .qr-tick{animation:bqd-pop .45s cubic-bezier(.2,1.4,.4,1) .15s forwards}
+.qr-frame.verified .qr-tick path{animation:bqd-draw .4s ease-out .5s forwards}
+@keyframes bqd-pop{to{opacity:1;transform:scale(1)}}
+@keyframes bqd-draw{to{stroke-dashoffset:0}}
+.qr-status-label .done{display:none;color:#1E8E3E}
+.qr-status.verified .qr-status-label{color:#1E8E3E}
+.qr-status.verified .ring{display:none}
+.qr-status.verified .done{display:inline}
+.qr-status.verified .qr-timer{display:none}
 .qr-dl{position:absolute;z-index:3;right:-14px;bottom:-14px;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--green);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(26,26,26,.12)}
 .alert{background:#FFF4F5;color:#9B1C2B;border:1px solid #FFD5DA;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600;margin:14px 0 0}
 .verify-tabs{display:flex;gap:8px;margin:26px 0 16px;background:#F6F7F9;padding:5px;border-radius:14px}
@@ -177,22 +223,25 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
 .footer{text-align:center;font-size:12px;color:var(--muted);margin-top:22px}
 .qr-timer{margin-top:12px;font:600 13px Inter,sans-serif;color:var(--muted);display:inline-flex;gap:7px;align-items:center;background:#F6F7F9;border-radius:999px;padding:7px 13px}
 .qr-timer.low{color:#9B1C2B;background:#FFF4F5}
-.qr-status{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:16px;flex-wrap:wrap}
+.qr-status{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:16px}
 .qr-status .qr-timer{margin-top:0}
-.qr-status-label{display:inline-flex;align-items:center;gap:8px;font:600 13px Inter,sans-serif;color:var(--muted)}
-.qr-status-label i{color:var(--green)}
+.qr-status-label{display:inline-flex;align-items:center;gap:12px;font:700 24px Inter,sans-serif;color:var(--ink);letter-spacing:-.3px}
+.ring{width:22px;height:22px;border-radius:50%;border:3px solid transparent;border-top-color:var(--green);border-right-color:var(--green);animation:bqd-spin .9s linear infinite}
+@keyframes bqd-spin{to{transform:rotate(360deg)}}
+.other-method{text-align:center;font-size:14px;color:var(--ink);margin:18px 0 0}
+.other-method a{color:#1A73E8;text-decoration:underline}
 .qr-expired{margin-top:14px;display:flex;flex-direction:column;gap:10px;align-items:center;background:#FFF4F5;border:1px solid #FFD5DA;border-radius:14px;padding:18px;font-size:14px;color:#9B1C2B;text-align:center}
 /* display:flex above would otherwise beat the hidden attribute. */
 .qr-expired[hidden]{display:none}
 .qr-expired strong{font-size:15px}
 .qr-expired .btn-pay{background:#9B1C2B;margin-top:2px}
-@media(max-width:520px){.qr-frame{width:180px;height:180px}.qr{width:168px;height:168px}.qr-frame:before{background:linear-gradient(var(--green),var(--green)) top left/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) top left/3px 15px no-repeat,linear-gradient(var(--green),var(--green)) top right/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) top right/3px 15px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/3px 15px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/3px 15px no-repeat}.main{padding:22px}}
+@media(max-width:520px){.qr-frame{width:232px;height:232px}.qr{width:220px;height:220px}.qr-logo{width:44px}.steps{font-size:13px;gap:8px}.qr-status-label{font-size:20px}.qr-frame:before{background:linear-gradient(var(--green),var(--green)) top left/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) top left/3px 15px no-repeat,linear-gradient(var(--green),var(--green)) top right/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) top right/3px 15px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom left/3px 15px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/15px 3px no-repeat,linear-gradient(var(--green),var(--green)) bottom right/3px 15px no-repeat}.main{padding:22px}}
 </style>
 </head>
 <body>
 <main class="page">
   <header class="top">
-    <button class="back" type="button" onclick="location.href='<?php echo pp_get_paymentlink($payment_id); ?>'" aria-label="Back"><i class="fa-solid fa-arrow-left"></i><span>Back</span></button>
+    <button class="back" type="button" id="bqd-back" aria-label="Back"><i class="fa-solid fa-arrow-left"></i><span>Back</span></button>
     <img src="<?php echo htmlspecialchars($logo); ?>" alt="Bangla QR">
     <span aria-hidden="true"></span>
   </header>
@@ -205,19 +254,25 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
   <section class="card main">
     <div class="scan">
       <?php if ($qr_src !== ''): ?>
-        <h2 id="bqd-scan-title">Scan to Pay</h2>
+        <div id="bqd-scan-title">
+          <h2>Pay with Bangla QR</h2>
+          <div class="steps"><span>Open App</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i><span>Scan QR</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i><span>Confirm</span></div>
+        </div>
         <div class="qr-frame" id="bqd-qr-wrap">
           <img class="qr" id="bqd-qr-img" src="<?php echo $qr_src; ?>" alt="Payment QR code" data-download="<?php echo htmlspecialchars($qr_download_name); ?>">
+          <img class="qr-logo" src="<?php echo htmlspecialchars($logo); ?>" alt="" aria-hidden="true">
+          <div class="qr-tick" aria-hidden="true"><svg viewBox="0 0 44 44"><path d="M12 23l7 7 14-15"/></svg></div>
           <button type="button" class="qr-dl" id="bqd-qr-dl" aria-label="Download QR code" title="Download QR"><i class="fa-solid fa-download"></i></button>
         </div>
         <?php if ($amount_locked): ?>
           <div class="qr-status" id="bqd-status-row">
             <span class="qr-timer" id="bqd-timer"><i class="fa-regular fa-clock"></i> <span id="bqd-timer-text">--:--</span></span>
-            <span class="qr-status-label">Payment Status <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i></span>
+            <span class="qr-status-label" id="bqd-status-label" aria-live="polite"><span id="bqd-status-text">Payment Status</span> <span class="ring" aria-hidden="true"></span><i class="fa-solid fa-circle-check done" aria-hidden="true"></i></span>
           </div>
           <div class="qr-expired" id="bqd-expired" style="display:none">
-            <strong>This payment window has closed.</strong>
-            <span>Already paid? Enter the transaction ID from your payment app, or upload the receipt, below.</span>
+            <strong>This QR has expired.</strong>
+            <span>Already paid? Enter the account number you paid from, or upload the receipt, below.</span>
+            <span class="qr-timer low" id="bqd-grace"><i class="fa-regular fa-clock"></i> Returning to payment methods in <span id="bqd-grace-text">--:--</span></span>
           </div>
         <?php endif; ?>
         <?php if ($encoded_amount !== '' && abs((float) $encoded_amount - (float) $payable) > 0.004): ?>
@@ -235,14 +290,14 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     ?>
     <div id="bqd-manual"<?php echo $manual_hidden ? ' style="display:none"' : ''; ?>>
     <div class="verify-tabs" id="bqd-verify-wrap" role="tablist" aria-label="Verification method">
-      <button type="button" class="verify-tab active" data-pane="trxid-pane" role="tab" aria-selected="true"><i class="fa-solid fa-receipt"></i> Transaction ID</button>
+      <button type="button" class="verify-tab active" data-pane="trxid-pane" role="tab" aria-selected="true"><i class="fa-solid fa-wallet"></i> Account Number</button>
       <button type="button" class="verify-tab" data-pane="slip-pane" role="tab" aria-selected="false"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Receipt</button>
     </div>
 
     <div class="verify-pane active" id="trxid-pane">
       <div class="field">
-        <label for="bqd-trxid">Transaction ID from your payment app</label>
-        <input class="input" id="bqd-trxid" name="bqd-trxid" placeholder="e.g. 9F2K7LQ1XZ" autocomplete="off">
+        <label for="bqd-account">Account / bKash / Nagad / etc. number you paid from</label>
+        <input class="input" id="bqd-account" name="bqd-account" placeholder="e.g. 01XXXXXXXXX" inputmode="numeric" autocomplete="off">
       </div>
       <span class="response" id="bqd-response" aria-live="polite"></span>
       <button class="btn-pay" type="button" id="bqd-verify"><i class="fa-solid fa-shield-halved"></i>&nbsp; Verify Payment</button>
@@ -261,6 +316,8 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
       <button class="btn-pay" type="button" id="bqd-slip-submit"><i class="fa-solid fa-cloud-arrow-up"></i>&nbsp; Upload Receipt</button>
     </div>
     </div>
+
+    <p class="other-method" id="bqd-other-method">Having trouble with QR payment? <a id="bqd-other-link" href="<?php echo htmlspecialchars(pp_get_paymentlink($payment_id)); ?>">Try another payment method.</a></p>
   </section>
 
   <footer class="footer">Secure payment verification &middot; Powered by <strong>KeyClan</strong></footer>
@@ -290,6 +347,34 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
             link.click();
             link.remove();
         });
+    }
+
+    // ---- Leaving the page ---------------------------------------------------
+    // Every way back to the gateway list frees the reserved amount first, so
+    // the transaction stays open for whichever gateway the customer picks next.
+    var paymentUrl = <?php echo json_encode(pp_get_paymentlink($payment_id)); ?>;
+    var leaving = false;
+    var submitting = false;
+    var leaveWhenIdle = false;
+
+    function leave() {
+        if (leaving) { return; }
+        leaving = true;
+        polling = false;
+        $.ajax({ type: 'POST', url: endpoint, data: { 'bqd-leave': 1 }, timeout: 4000 })
+            .always(function () { location.href = paymentUrl; });
+    }
+
+    $('#bqd-back, #bqd-other-link').on('click', function (event) {
+        event.preventDefault();
+        leave();
+    });
+
+    // A submission that fails after the deadline passed still sends the
+    // customer back; one that succeeds moves them on by itself.
+    function submitFailed() {
+        submitting = false;
+        if (leaveWhenIdle) { leave(); }
     }
 
     $('.verify-tab').on('click', function () {
@@ -327,6 +412,7 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
         }
 
         var original = button.innerHTML;
+        submitting = true;
         button.disabled = true;
         button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>&nbsp; Uploading...';
 
@@ -349,35 +435,38 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
                     box.text((result && result.message) ? result.message : 'Upload failed.');
                     button.disabled = false;
                     button.innerHTML = original;
+                    submitFailed();
                 }
             },
             error: function () {
                 box.text('Unable to upload the receipt. Please try again.');
                 button.disabled = false;
                 button.innerHTML = original;
+                submitFailed();
             }
         });
     });
 
-    $('#bqd-verify').on('click', function () {        var button = this;
+    $('#bqd-verify').on('click', function () {
+        var button = this;
         var field = $('#bqd-response');
-        var trxid = $.trim($('#bqd-trxid').val() || '');
-        var pattern = /^[A-Za-z0-9_-]{1,100}$/;
+        var account = ($('#bqd-account').val() || '').replace(/[\s-]+/g, '').replace(/^\+/, '');
         field.text('');
 
-        if (!pattern.test(trxid)) {
-            field.text('Enter the transaction ID from your payment app.');
+        if (!/^[0-9]{6,20}$/.test(account)) {
+            field.text('Enter the account or wallet number you paid from (digits only).');
             return;
         }
 
         var original = button.innerHTML;
+        submitting = true;
         button.disabled = true;
         button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>&nbsp; Verifying...';
 
         $.ajax({
             type: 'POST',
             url: endpoint,
-            data: { 'bangla-qr-dynamic': paymentId, trxid: trxid },
+            data: { 'bangla-qr-dynamic': paymentId, account: account },
             success: function (response) {
                 var result = null;
                 try { result = JSON.parse(response); } catch (e) { result = null; }
@@ -388,11 +477,13 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
                 field.text((result && result.message) ? result.message : 'Request failed.');
                 button.disabled = false;
                 button.innerHTML = original;
+                submitFailed();
             },
             error: function () {
                 field.text('Unable to verify the payment. Please try again.');
                 button.disabled = false;
                 button.innerHTML = original;
+                submitFailed();
             }
         });
     });
@@ -427,6 +518,27 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
         // confirms a little late still settles the page on its own.
     }
 
+    var graceText = document.getElementById('bqd-grace-text');
+
+    function formatLeft(left) {
+        var m = Math.floor(left / 60);
+        var s = left % 60;
+        return m + ':' + (s < 10 ? '0' + s : s);
+    }
+
+    // After the QR closes the customer has until the match window ends to
+    // report a payment; then the page goes back to the gateway list.
+    function graceTick() {
+        if (!locked || verified || leaving) { return; }
+        var left = matchSeconds - Math.floor((Date.now() - startedAt) / 1000);
+        if (left <= 0) {
+            if (submitting) { leaveWhenIdle = true; } else { leave(); }
+            return;
+        }
+        if (graceText) { graceText.textContent = formatLeft(left); }
+        setTimeout(graceTick, 1000);
+    }
+
     function tick() {
         if (!locked || !windowOpen) { return; }
         // Elapsed time is measured locally; the length of the window comes from
@@ -434,13 +546,10 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
         var left = secondsLeft - Math.floor((Date.now() - startedAt) / 1000);
         if (left <= 0) {
             closeWindow();
+            graceTick();
             return;
         }
-        if (timerText) {
-            var m = Math.floor(left / 60);
-            var s = left % 60;
-            timerText.textContent = m + ':' + (s < 10 ? '0' + s : s);
-        }
+        if (timerText) { timerText.textContent = formatLeft(left); }
         if (timerBox && left <= 30) { timerBox.classList.add('low'); }
         setTimeout(tick, 1000);
     }
@@ -451,8 +560,25 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
     // It asks a small endpoint that always answers JSON: the payment page itself
     // replies with HTML for a dozen different reasons, and treating that as
     // "payment finished" sent customers back to the checkout mid-payment.
-    var paymentUrl = <?php echo json_encode(pp_get_paymentlink($payment_id)); ?>;
     var statusUrl = <?php echo json_encode($status_url); ?>;
+
+    var verified = false;
+
+    function showVerified() {
+        verified = true;
+        // Stop the countdown so it cannot close the window under the tick.
+        windowOpen = false;
+        if (manualBox) { manualBox.style.display = 'none'; }
+        if (expiredBox) { expiredBox.style.display = 'none'; }
+        // A late match can land after the QR was hidden; bring it back for this.
+        if (qrWrap) { qrWrap.style.display = ''; qrWrap.classList.add('verified'); }
+        if (scanTitle) { scanTitle.style.display = ''; }
+        if (statusRow) { statusRow.style.display = ''; statusRow.classList.add('verified'); }
+        var other = document.getElementById('bqd-other-method');
+        if (other) { other.style.display = 'none'; }
+        var text = document.getElementById('bqd-status-text');
+        if (text) { text.textContent = 'Payment Verified'; }
+    }
 
     function poll() {
         if (!polling) { return; }
@@ -472,7 +598,13 @@ body{margin:0;background:#FAFAFC;color:var(--ink);font-family:Inter,sans-serif}
                     && result.transaction_status
                     && result.transaction_status !== 'initialize') {
                     polling = false;
-                    location.href = paymentUrl;
+                    if (result.transaction_status === 'completed') {
+                        showVerified();
+                        // Long enough to see the tick, short enough not to wait on it.
+                        setTimeout(function () { location.href = paymentUrl; }, 2500);
+                    } else {
+                        location.href = paymentUrl;
+                    }
                     return;
                 }
                 setTimeout(poll, 5000);
