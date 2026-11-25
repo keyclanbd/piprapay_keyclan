@@ -249,6 +249,17 @@ $logo_url = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_d
                     <div class="text-secondary mt-2">Completes a payment when an incoming SMS matches the exact amount.</div>
                   </div>
                 </div>
+
+                <div class="row mb-4">
+                  <div class="col-sm-4">
+                    <label for="reuse_cooldown_minutes" class="col-sm-12 col-form-label form-label">Amount reuse cooldown</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" name="reuse_cooldown_minutes" id="reuse_cooldown_minutes" min="2" max="120" value="<?php echo htmlspecialchars((string) ($settings['reuse_cooldown_minutes'] ?? '10')); ?>">
+                        <span class="input-group-text">min</span>
+                    </div>
+                    <div class="text-secondary mt-2">How long a released amount (for example 1020.11) is kept from other customers, in case that customer's SMS arrives late.</div>
+                  </div>
+                </div>
             </div>
           </div>
 

@@ -90,6 +90,13 @@ function bangla_qr_dynamic_validate_extra_settings(array $settings)
         }
     }
 
+    if (isset($settings['reuse_cooldown_minutes'])) {
+        $cooldown = (int) $settings['reuse_cooldown_minutes'];
+        if ($cooldown < 2 || $cooldown > 120) {
+            return 'Amount reuse cooldown must be between 2 and 120 minutes.';
+        }
+    }
+
     if (isset($settings['auto_verify']) && !in_array(strtolower((string) $settings['auto_verify']), array('enable', 'disable'), true)) {
         return 'Auto verify must be enabled or disabled.';
     }

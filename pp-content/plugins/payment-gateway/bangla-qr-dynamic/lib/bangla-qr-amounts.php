@@ -56,10 +56,19 @@ function bangla_qr_dynamic_amounts_ensure_schema($conn = null, $prefix = null)
             match_until INT NOT NULL,
             created_at INT NOT NULL,
             matched_at INT NOT NULL DEFAULT 0,
+            sms_floor_id INT NOT NULL DEFAULT 0,
             UNIQUE KEY uniq_bqd_pp (pp_id),
             UNIQUE KEY uniq_bqd_live (live_payable),
             KEY idx_bqd_open (status, match_until)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4") !== false;
+
+        // Tables made before sms_floor_id existed get it added once.
+        if ($ok) {
+            $column = $conn->query("SHOW COLUMNS FROM `{$prefix}bqd_amounts` LIKE 'sms_floor_id'");
+            if ($column && $column->num_rows === 0) {
+                $ok = $conn->query("ALTER TABLE `{$prefix}bqd_amounts` ADD COLUMN sms_floor_id INT NOT NULL DEFAULT 0") !== false;
+            }
+        }
     } catch (Throwable $e) {
         error_log('bangla-qr-dynamic schema: ' . $e->getMessage());
         $ok = false;
@@ -105,6 +114,101 @@ function bangla_qr_dynamic_amount_row($conn, $prefix, $ppId)
 }
 
 /**
+ * The newest stored SMS id. A reservation remembers it when it is issued, and
+ * only a message stored after that can confirm it, so an unused SMS left over
+ * from an earlier checkout can never complete a later one that was given the
+ * same amount. Row order is used rather than timestamps: phone messages carry
+ * the bank's minute-rounded time, which a timezone setting can shift by hours.
+ *
+ * @param mysqli $conn
+ * @param string $prefix
+ * @return int
+ */
+function bangla_qr_dynamic_sms_floor_id($conn, $prefix)
+{
+    try {
+        $result = $conn->query("SELECT COALESCE(MAX(id), 0) FROM `{$prefix}sms_data`");
+        $row = $result ? $result->fetch_row() : null;
+
+        return $row ? (int) $row[0] : 0;
+    } catch (Throwable $e) {
+        error_log('bangla-qr-dynamic sms floor: ' . $e->getMessage());
+
+        return 0;
+    }
+}
+
+/**
+ * Payable totals that must not be handed to this checkout, keyed by the two
+ * decimal string:
+ *  - an unused SMS (approved or in review) from the last day already has that
+ *    amount, so a new checkout on it would put two claims on one payment;
+ *  - another checkout released it less than $cooldownSeconds ago, so a late
+ *    SMS from that customer could still be on its way.
+ *
+ * @param mysqli $conn
+ * @param string $prefix
+ * @param string $ppId
+ * @param int    $baseCents
+ * @param int    $cooldownSeconds
+ * @param int    $now
+ * @return array<string,bool>
+ */
+function bangla_qr_dynamic_blocked_amounts($conn, $prefix, $ppId, $baseCents, $cooldownSeconds, $now)
+{
+    $blocked = array();
+    $low = $baseCents + 10;
+    $high = $baseCents + 99;
+
+    try {
+        $since = date('Y-m-d H:i:s', $now - 86400);
+        $stmt = $conn->prepare("SELECT amount FROM `{$prefix}sms_data` WHERE status IN ('approved', 'review') AND created_at >= ?");
+        if ($stmt) {
+            $stmt->bind_param('s', $since);
+            if ($stmt->execute()) {
+                $result = $stmt->get_result();
+                while ($result && ($row = $result->fetch_row())) {
+                    $amount = str_replace(',', '', trim((string) $row[0]));
+                    if ($amount === '' || !is_numeric($amount)) {
+                        continue;
+                    }
+                    $cents = (int) round(((float) $amount) * 100);
+                    if ($cents >= $low && $cents <= $high) {
+                        $blocked[number_format($cents / 100, 2, '.', '')] = true;
+                    }
+                }
+            }
+            $stmt->close();
+        }
+    } catch (Throwable $e) {
+        error_log('bangla-qr-dynamic unused sms: ' . $e->getMessage());
+    }
+
+    if ($cooldownSeconds > 0) {
+        try {
+            $base = number_format($baseCents / 100, 2, '.', '');
+            $after = $now - $cooldownSeconds;
+            $stmt = $conn->prepare("SELECT payable FROM `{$prefix}bqd_amounts`
+                WHERE pp_id <> ? AND live_payable IS NULL AND base_payable = ? AND matched_at >= ?");
+            if ($stmt) {
+                $stmt->bind_param('ssi', $ppId, $base, $after);
+                if ($stmt->execute()) {
+                    $result = $stmt->get_result();
+                    while ($result && ($row = $result->fetch_row())) {
+                        $blocked[number_format((float) $row[0], 2, '.', '')] = true;
+                    }
+                }
+                $stmt->close();
+            }
+        } catch (Throwable $e) {
+            error_log('bangla-qr-dynamic cooldown: ' . $e->getMessage());
+        }
+    }
+
+    return $blocked;
+}
+
+/**
  * Insert one reservation attempt. Returns false when the payable total is
  * already taken (duplicate key on `uniq_bqd_live`).
  *
@@ -120,20 +224,21 @@ function bangla_qr_dynamic_amount_row($conn, $prefix, $ppId)
  * @param int    $now
  * @return bool
  */
-function bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now)
+function bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId = 0)
 {
     $stmt = null;
     try {
         $stmt = $conn->prepare("INSERT INTO `{$prefix}bqd_amounts`
-            (pp_id, payable, live_payable, base_payable, status, sms_id, expires_at, match_until, created_at)
-            VALUES (?, ?, ?, ?, 'open', 0, ?, ?, ?)");
+            (pp_id, payable, live_payable, base_payable, status, sms_id, expires_at, match_until, created_at, sms_floor_id)
+            VALUES (?, ?, ?, ?, 'open', 0, ?, ?, ?, ?)");
     } catch (Throwable $e) {
         return false;
     }
     if (!$stmt) {
         return false;
     }
-    $stmt->bind_param('ssssiii', $ppId, $payable, $payable, $base, $expiresAt, $matchUntil, $now);
+    $smsFloorId = (int) $smsFloorId;
+    $stmt->bind_param('ssssiiii', $ppId, $payable, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId);
 
     $ok = false;
     try {
@@ -166,13 +271,13 @@ function bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, 
  * @param int    $now
  * @return bool
  */
-function bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now)
+function bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId = 0)
 {
     $stmt = null;
     try {
         $stmt = $conn->prepare("UPDATE `{$prefix}bqd_amounts`
             SET payable = ?, live_payable = ?, base_payable = ?, status = 'open', sms_id = 0,
-                expires_at = ?, match_until = ?, created_at = ?, matched_at = 0
+                expires_at = ?, match_until = ?, created_at = ?, matched_at = 0, sms_floor_id = ?
             WHERE pp_id = ? AND status <> 'matched' AND (status <> 'open' OR match_until < ?)");
     } catch (Throwable $e) {
         return false;
@@ -180,7 +285,8 @@ function bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, 
     if (!$stmt) {
         return false;
     }
-    $stmt->bind_param('sssiiisi', $payable, $payable, $base, $expiresAt, $matchUntil, $now, $ppId, $now);
+    $smsFloorId = (int) $smsFloorId;
+    $stmt->bind_param('sssiiiisi', $payable, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId, $ppId, $now);
 
     $ok = false;
     try {
@@ -205,11 +311,13 @@ function bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, 
  * @param float      $baseAmount   Amount due before the tag.
  * @param int        $qrSeconds    How long the QR is shown as valid.
  * @param int        $graceSeconds How long after that a late SMS can still match.
+ * @param int        $cooldownSeconds How long a released amount stays out of
+ *                   use for other checkouts.
  * @param mysqli|null $conn
  * @param string|null $prefix
  * @return array{ok:bool, payable?:string, expires_at?:int, match_until?:int, reused?:bool, error?:string, degraded?:bool, expired?:bool}
  */
-function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSeconds, $conn = null, $prefix = null)
+function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSeconds, $cooldownSeconds = 600, $conn = null, $prefix = null)
 {
     $conn = $conn ?: connectDatabase();
     $prefix = $prefix ?: $GLOBALS['db_prefix'];
@@ -274,12 +382,17 @@ function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSe
     // pays as close to the total as possible: 1020.10, then 1020.11, then
     // 1020.12 for the next one instead of jumping to 1020.87.
     $tags = range(10, 99);
+    $blocked = bangla_qr_dynamic_blocked_amounts($conn, $prefix, $ppId, $baseCents, max(0, (int) $cooldownSeconds), $now);
+    $smsFloorId = bangla_qr_dynamic_sms_floor_id($conn, $prefix);
 
     foreach ($tags as $cents) {
         $payable = number_format(($baseCents + $cents) / 100, 2, '.', '');
+        if (isset($blocked[$payable])) {
+            continue;
+        }
         $claimed = $existing === null
-            ? bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now)
-            : bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now);
+            ? bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId)
+            : bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId);
         if ($claimed) {
             return array(
                 'ok' => true,
@@ -333,12 +446,15 @@ function bangla_qr_dynamic_release_amount($conn, $prefix, $ppId, $status)
  */
 function bangla_qr_dynamic_complete_by_amount($conn, $prefix, $payable, $smsId, $sender, $trxid)
 {
-    $stmt = $conn->prepare("SELECT pp_id FROM `{$prefix}bqd_amounts` WHERE live_payable = ? AND status = 'open' AND match_until >= ? LIMIT 1");
+    // sms_floor_id < smsId: the message was stored after this amount was
+    // issued. An older unused SMS for the same figure belongs to someone else.
+    $stmt = $conn->prepare("SELECT pp_id FROM `{$prefix}bqd_amounts` WHERE live_payable = ? AND status = 'open' AND match_until >= ? AND sms_floor_id < ? LIMIT 1");
     if (!$stmt) {
         return 'failed';
     }
     $now = time();
-    $stmt->bind_param('si', $payable, $now);
+    $smsIdInt = (int) $smsId;
+    $stmt->bind_param('sii', $payable, $now, $smsIdInt);
     if (!$stmt->execute()) {
         $stmt->close();
         return 'failed';
