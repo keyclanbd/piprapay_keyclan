@@ -148,6 +148,53 @@ function bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, 
 }
 
 /**
+ * Reopen a released reservation with a new payable total. Used when the
+ * customer went back to the gateway list and chose this gateway again: the
+ * row for the transaction already exists, so it is updated rather than
+ * inserted. Returns false when the payable total is already taken.
+ *
+ * Only a row that is no longer live is touched; one that was matched to a
+ * payment is never reopened.
+ *
+ * @param mysqli $conn
+ * @param string $prefix
+ * @param string $ppId
+ * @param string $payable
+ * @param string $base
+ * @param int    $expiresAt
+ * @param int    $matchUntil
+ * @param int    $now
+ * @return bool
+ */
+function bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now)
+{
+    $stmt = null;
+    try {
+        $stmt = $conn->prepare("UPDATE `{$prefix}bqd_amounts`
+            SET payable = ?, live_payable = ?, base_payable = ?, status = 'open', sms_id = 0,
+                expires_at = ?, match_until = ?, created_at = ?, matched_at = 0
+            WHERE pp_id = ? AND status <> 'matched' AND (status <> 'open' OR match_until < ?)");
+    } catch (Throwable $e) {
+        return false;
+    }
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('sssiiisi', $payable, $payable, $base, $expiresAt, $matchUntil, $now, $ppId, $now);
+
+    $ok = false;
+    try {
+        $ok = $stmt->execute() === true && $stmt->affected_rows === 1;
+    } catch (Throwable $e) {
+        // 1062 is a duplicate key: that amount is taken, try the next tag.
+        $ok = false;
+    }
+    $stmt->close();
+
+    return $ok;
+}
+
+/**
  * Reserve (or re-use) the payable total for a checkout.
  *
  * The amount never changes while a reservation is live, so refreshing the
@@ -208,7 +255,11 @@ function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSe
             );
         }
 
-        return array('ok' => false, 'expired' => true, 'error' => 'This payment window has closed. Please start a new payment.');
+        if ($existing['status'] === 'matched') {
+            return array('ok' => false, 'expired' => true, 'error' => 'This payment has already been received.');
+        }
+        // Released (the customer went back to the gateway list) or left to run
+        // out: this is a fresh visit, so it gets a fresh tag below.
     }
 
     $baseCents = (int) round(((float) $baseAmount) * 100);
@@ -226,7 +277,10 @@ function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSe
 
     foreach ($tags as $cents) {
         $payable = number_format(($baseCents + $cents) / 100, 2, '.', '');
-        if (bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now)) {
+        $claimed = $existing === null
+            ? bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now)
+            : bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now);
+        if ($claimed) {
             return array(
                 'ok' => true,
                 'payable' => $payable,
