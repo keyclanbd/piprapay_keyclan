@@ -2427,6 +2427,103 @@ $i_id = bin2hex(random_bytes(12));
             
             
             
+            // ---- Gateway copies: a second checkout entry for the same gateway ----
+            if($action == "gateway_copy-create" || $action == "gateway_copy-delete"){
+                header('Content-Type: application/json');
+                if ($mode == "demo") {
+                    echo json_encode(['status' => false, 'message' => 'Error: Demo mode is active']);
+                    exit();
+                }
+
+                $slug = $_POST['plugin_slug'] ?? '';
+                if (!is_string($slug) || !preg_match('/^[a-z0-9-]{1,64}$/', $slug)) {
+                    echo json_encode(['status' => false, 'message' => 'Invalid gateway.']);
+                    exit();
+                }
+                $info = pp_get_plugin_info($slug);
+                if (($info['plugin_dir'] ?? '') !== 'payment-gateway') {
+                    echo json_encode(['status' => false, 'message' => 'Invalid gateway.']);
+                    exit();
+                }
+                $codeSlug = pp_gateway_code_slug($slug);
+                $conn = connectDatabase();
+
+                if ($action == "gateway_copy-delete") {
+                    if ($codeSlug === $slug) {
+                        echo json_encode(['status' => false, 'message' => 'Only a copy can be deleted here.']);
+                        exit();
+                    }
+                    $copyName = pp_gateway_display_name(['payment_method' => $info['plugin_name'] ?? $slug, 'payment_method_id' => $slug]);
+                    $stmt = $conn->prepare("DELETE FROM `{$db_prefix}plugins` WHERE plugin_slug = ? AND plugin_dir = 'payment-gateway'");
+                    $stmt->bind_param('s', $slug);
+                    $deleted = $stmt->execute() && $stmt->affected_rows === 1;
+                    $stmt->close();
+                    unset($GLOBALS['pp_plugin_setting_rows']);
+                    if ($deleted) {
+                        pp_notify_admin_activity('gateway_updated', 'Gateway Copy Deleted', ['Gateway: ' . $copyName]);
+                    }
+                    echo json_encode($deleted
+                        ? ['status' => true, 'message' => 'Copy deleted.']
+                        : ['status' => false, 'message' => 'The copy could not be deleted.']);
+                    exit();
+                }
+
+                // Copies run their original's code, which has to know how.
+                $classFile = __DIR__ . '/../pp-content/plugins/payment-gateway/' . $codeSlug . '/' . $codeSlug . '-class.php';
+                if (is_file($classFile)) {
+                    require_once $classFile;
+                }
+                if (!pp_gateway_supports_copies($codeSlug)) {
+                    echo json_encode(['status' => false, 'message' => 'This gateway cannot be copied yet.']);
+                    exit();
+                }
+
+                // The first free <original>-2, -3, ... that is neither a gateway nor a folder.
+                $newSlug = '';
+                for ($n = 2; $n <= 99; $n++) {
+                    $candidate = $codeSlug . '-' . $n;
+                    if (strlen($candidate) <= 64 && pp_get_plugin_info($candidate) === []
+                        && !is_dir(__DIR__ . '/../pp-content/plugins/payment-gateway/' . $candidate)) {
+                        $newSlug = $candidate;
+                        break;
+                    }
+                }
+                if ($newSlug === '') {
+                    echo json_encode(['status' => false, 'message' => 'No more copies can be made of this gateway.']);
+                    exit();
+                }
+
+                // Start from the settings of the gateway being copied. The copy stays
+                // off until it is reviewed, so it never shows at checkout by surprise.
+                $originalInfo = pp_get_plugin_info($codeSlug);
+                $baseName = (string) ($originalInfo['plugin_name'] ?? $codeSlug);
+                $settings = pp_get_plugin_setting($slug, false);
+                $settings = is_array($settings) ? $settings : [];
+                $sourceName = trim((string) ($settings['display_name'] ?? ''));
+                $settings['display_name'] = ($sourceName !== '' ? $sourceName : $baseName) . ' ' . $n;
+                $settings['status'] = 'disable';
+                $settings['_copy_of'] = $codeSlug;
+
+                $pluginName = $baseName . ' ' . $n;
+                $pluginDir = 'payment-gateway';
+                $pluginArray = json_encode($settings);
+                $status = 'active';
+                $now = date('Y-m-d H:i:s');
+                $stmt = $conn->prepare("INSERT INTO `{$db_prefix}plugins` (plugin_name, plugin_slug, plugin_dir, plugin_array, status, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param('ssssss', $pluginName, $newSlug, $pluginDir, $pluginArray, $status, $now);
+                $created = $stmt->execute();
+                $stmt->close();
+                unset($GLOBALS['pp_plugin_setting_rows']);
+
+                if (!$created) {
+                    echo json_encode(['status' => false, 'message' => 'The copy could not be created.']);
+                    exit();
+                }
+                pp_notify_admin_activity('gateway_updated', 'Gateway Copied', ['Gateway: ' . $baseName, 'Copy: ' . $settings['display_name']]);
+                echo json_encode(['status' => true, 'slug' => $newSlug, 'message' => 'Copy created. It is turned off until you enable it.']);
+                exit();
+            }
+
             if($action == "plugin_update-submit"){
                 if ($mode == "demo") {
                     echo json_encode(["status" => "false", "message" => "Error: Demo mode is active"]);
@@ -2469,9 +2566,14 @@ $i_id = bin2hex(random_bytes(12));
 
                 // A gateway with its own settings rules ships <slug>-helpers.php with <slug>_prepare_settings().
                 $settingsNotice = '';
+                // Which gateway this is a copy of is set when the copy is made, never by the form.
+                unset($newData['_copy_of']);
+                $copyOf = (string) (pp_get_plugin_setting($plugin_slug, false)['_copy_of'] ?? '');
                 if (preg_match('/^[a-z0-9-]+$/', (string) $plugin_slug)) {
-                    $gatewayHelpers = __DIR__ . '/../pp-content/plugins/payment-gateway/' . $plugin_slug . '/' . $plugin_slug . '-helpers.php';
-                    $prepareSettings = str_replace('-', '_', $plugin_slug) . '_prepare_settings';
+                    // A copy is checked by its original's rules.
+                    $codeSlug = pp_gateway_code_slug($plugin_slug);
+                    $gatewayHelpers = __DIR__ . '/../pp-content/plugins/payment-gateway/' . $codeSlug . '/' . $codeSlug . '-helpers.php';
+                    $prepareSettings = str_replace('-', '_', $codeSlug) . '_prepare_settings';
                     if (is_file($gatewayHelpers)) {
                         require_once $gatewayHelpers;
                     }
@@ -2497,6 +2599,10 @@ $i_id = bin2hex(random_bytes(12));
                 unset($newData['qr_code']);
                 if ($qrResult['qr_code'] !== '') {
                     $newData['qr_code'] = $qrResult['qr_code'];
+                }
+                unset($newData['_copy_of']);
+                if ($copyOf !== '') {
+                    $newData['_copy_of'] = $copyOf;
                 }
                 $success = pp_set_plugin_setting($plugin_slug, $newData);
 

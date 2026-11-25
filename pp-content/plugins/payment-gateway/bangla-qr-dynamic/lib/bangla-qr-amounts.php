@@ -57,16 +57,26 @@ function bangla_qr_dynamic_amounts_ensure_schema($conn = null, $prefix = null)
             created_at INT NOT NULL,
             matched_at INT NOT NULL DEFAULT 0,
             sms_floor_id INT NOT NULL DEFAULT 0,
+            gateway_slug VARCHAR(64) NOT NULL DEFAULT 'bangla-qr-dynamic',
             UNIQUE KEY uniq_bqd_pp (pp_id),
             UNIQUE KEY uniq_bqd_live (live_payable),
             KEY idx_bqd_open (status, match_until)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4") !== false;
 
-        // Tables made before sms_floor_id existed get it added once.
-        if ($ok) {
-            $column = $conn->query("SHOW COLUMNS FROM `{$prefix}bqd_amounts` LIKE 'sms_floor_id'");
+        // Tables made before a column existed get it added once.
+        $added = array(
+            'sms_floor_id' => "INT NOT NULL DEFAULT 0",
+            // Which gateway (or copy of it) issued the amount. Older rows all
+            // came from the original.
+            'gateway_slug' => "VARCHAR(64) NOT NULL DEFAULT 'bangla-qr-dynamic'",
+        );
+        foreach ($added as $name => $definition) {
+            if (!$ok) {
+                break;
+            }
+            $column = $conn->query("SHOW COLUMNS FROM `{$prefix}bqd_amounts` LIKE '{$name}'");
             if ($column && $column->num_rows === 0) {
-                $ok = $conn->query("ALTER TABLE `{$prefix}bqd_amounts` ADD COLUMN sms_floor_id INT NOT NULL DEFAULT 0") !== false;
+                $ok = $conn->query("ALTER TABLE `{$prefix}bqd_amounts` ADD COLUMN {$name} {$definition}") !== false;
             }
         }
     } catch (Throwable $e) {
@@ -93,7 +103,7 @@ function bangla_qr_dynamic_amount_row($conn, $prefix, $ppId)
 {
     $stmt = null;
     try {
-        $stmt = $conn->prepare("SELECT pp_id, payable, status, expires_at, match_until FROM `{$prefix}bqd_amounts` WHERE pp_id = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT pp_id, payable, status, expires_at, match_until, gateway_slug FROM `{$prefix}bqd_amounts` WHERE pp_id = ? LIMIT 1");
     } catch (Throwable $e) {
         error_log('bangla-qr-dynamic lookup: ' . $e->getMessage());
         return null;
@@ -224,13 +234,13 @@ function bangla_qr_dynamic_blocked_amounts($conn, $prefix, $ppId, $baseCents, $c
  * @param int    $now
  * @return bool
  */
-function bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId = 0)
+function bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId = 0, $gatewaySlug = BQR_DYNAMIC_SLUG)
 {
     $stmt = null;
     try {
         $stmt = $conn->prepare("INSERT INTO `{$prefix}bqd_amounts`
-            (pp_id, payable, live_payable, base_payable, status, sms_id, expires_at, match_until, created_at, sms_floor_id)
-            VALUES (?, ?, ?, ?, 'open', 0, ?, ?, ?, ?)");
+            (pp_id, payable, live_payable, base_payable, status, sms_id, expires_at, match_until, created_at, sms_floor_id, gateway_slug)
+            VALUES (?, ?, ?, ?, 'open', 0, ?, ?, ?, ?, ?)");
     } catch (Throwable $e) {
         return false;
     }
@@ -238,7 +248,8 @@ function bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, 
         return false;
     }
     $smsFloorId = (int) $smsFloorId;
-    $stmt->bind_param('ssssiiii', $ppId, $payable, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId);
+    $gatewaySlug = (string) $gatewaySlug;
+    $stmt->bind_param('ssssiiiis', $ppId, $payable, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId, $gatewaySlug);
 
     $ok = false;
     try {
@@ -271,14 +282,14 @@ function bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, 
  * @param int    $now
  * @return bool
  */
-function bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId = 0)
+function bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId = 0, $gatewaySlug = BQR_DYNAMIC_SLUG)
 {
     $stmt = null;
     try {
         $stmt = $conn->prepare("UPDATE `{$prefix}bqd_amounts`
             SET payable = ?, live_payable = ?, base_payable = ?, status = 'open', sms_id = 0,
-                expires_at = ?, match_until = ?, created_at = ?, matched_at = 0, sms_floor_id = ?
-            WHERE pp_id = ? AND status <> 'matched' AND (status <> 'open' OR match_until < ?)");
+                expires_at = ?, match_until = ?, created_at = ?, matched_at = 0, sms_floor_id = ?, gateway_slug = ?
+            WHERE pp_id = ? AND status <> 'matched' AND (status <> 'open' OR match_until < ? OR gateway_slug <> ?)");
     } catch (Throwable $e) {
         return false;
     }
@@ -286,7 +297,8 @@ function bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, 
         return false;
     }
     $smsFloorId = (int) $smsFloorId;
-    $stmt->bind_param('sssiiiisi', $payable, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId, $ppId, $now);
+    $gatewaySlug = (string) $gatewaySlug;
+    $stmt->bind_param('sssiiiissis', $payable, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId, $gatewaySlug, $ppId, $now, $gatewaySlug);
 
     $ok = false;
     try {
@@ -317,7 +329,7 @@ function bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, 
  * @param string|null $prefix
  * @return array{ok:bool, payable?:string, expires_at?:int, match_until?:int, reused?:bool, error?:string, degraded?:bool, expired?:bool}
  */
-function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSeconds, $cooldownSeconds = 600, $conn = null, $prefix = null)
+function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSeconds, $cooldownSeconds = 600, $conn = null, $prefix = null, $gatewaySlug = BQR_DYNAMIC_SLUG)
 {
     $conn = $conn ?: connectDatabase();
     $prefix = $prefix ?: $GLOBALS['db_prefix'];
@@ -335,7 +347,10 @@ function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSe
 
     $existing = bangla_qr_dynamic_amount_row($conn, $prefix, $ppId);
     if ($existing !== null) {
-        if ($existing['status'] === 'open' && (int) $existing['match_until'] >= $now) {
+        // Same gateway (or copy) as before: a refresh. Switching to another copy
+        // is a fresh visit, so its QR and its payments belong to that copy.
+        $sameGateway = (string) ($existing['gateway_slug'] ?? BQR_DYNAMIC_SLUG) === (string) $gatewaySlug;
+        if ($sameGateway && $existing['status'] === 'open' && (int) $existing['match_until'] >= $now) {
             // Same amount, full window. The customer gets the configured time
             // on every page load, not whatever is left of the first one, so the
             // QR never closes earlier than the setting says. The match window
@@ -391,8 +406,8 @@ function bangla_qr_dynamic_claim_amount($ppId, $baseAmount, $qrSeconds, $graceSe
             continue;
         }
         $claimed = $existing === null
-            ? bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId)
-            : bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId);
+            ? bangla_qr_dynamic_insert_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId, $gatewaySlug)
+            : bangla_qr_dynamic_reopen_claim($conn, $prefix, $ppId, $payable, $base, $expiresAt, $matchUntil, $now, $smsFloorId, $gatewaySlug);
         if ($claimed) {
             return array(
                 'ok' => true,
@@ -442,13 +457,14 @@ function bangla_qr_dynamic_release_amount($conn, $prefix, $ppId, $status)
  * @param int    $smsId
  * @param string $sender
  * @param string $trxid
- * @return string One of: matched, no-amount, not-open, failed.
+ * @param string $smsStatus  approved or review.
+ * @return string One of: matched, no-amount, not-open, skipped, failed.
  */
-function bangla_qr_dynamic_complete_by_amount($conn, $prefix, $payable, $smsId, $sender, $trxid)
+function bangla_qr_dynamic_complete_by_amount($conn, $prefix, $payable, $smsId, $sender, $trxid, $smsStatus = 'approved')
 {
     // sms_floor_id < smsId: the message was stored after this amount was
     // issued. An older unused SMS for the same figure belongs to someone else.
-    $stmt = $conn->prepare("SELECT pp_id FROM `{$prefix}bqd_amounts` WHERE live_payable = ? AND status = 'open' AND match_until >= ? AND sms_floor_id < ? LIMIT 1");
+    $stmt = $conn->prepare("SELECT pp_id, gateway_slug FROM `{$prefix}bqd_amounts` WHERE live_payable = ? AND status = 'open' AND match_until >= ? AND sms_floor_id < ? LIMIT 1");
     if (!$stmt) {
         return 'failed';
     }
@@ -468,6 +484,17 @@ function bangla_qr_dynamic_complete_by_amount($conn, $prefix, $payable, $smsId, 
     }
     $ppId = (string) $row['pp_id'];
 
+    // The gateway, or the copy of it, that issued this amount: its own switch
+    // decides whether an SMS may confirm it, and the payment is recorded as it.
+    $gatewaySlug = (string) ($row['gateway_slug'] ?? BQR_DYNAMIC_SLUG);
+    $settings = pp_get_plugin_setting($gatewaySlug, false);
+    if (!is_array($settings) || $settings === array()
+        || strtolower((string) ($settings['auto_verify'] ?? 'enable')) !== 'enable') {
+        return 'skipped';
+    }
+    $gatewayInfo = pp_get_plugin_info($gatewaySlug);
+    $gatewayName = (string) ($gatewayInfo['plugin_name'] ?? 'Bangla QR Dynamic');
+
     $transaction = pp_get_transation($ppId);
     if (($transaction['status'] ?? false) !== true) {
         return 'failed';
@@ -480,10 +507,27 @@ function bangla_qr_dynamic_complete_by_amount($conn, $prefix, $payable, $smsId, 
         return 'not-open';
     }
 
+    // A bank message is parked as "review" because the sender can be forged.
+    // An exact match against a live reservation is the stronger signal here:
+    // that figure was issued moments ago to one specific checkout. Only a
+    // message that is about to confirm one is approved.
+    if ($smsStatus === 'review') {
+        $approve = $conn->prepare("UPDATE `{$prefix}sms_data` SET status = 'approved' WHERE id = ? AND status = 'review'");
+        if ($approve) {
+            $approve->bind_param('i', $smsId);
+            try {
+                $approve->execute();
+            } catch (Throwable $e) {
+                // Leave it in review; the admin can still approve it by hand.
+            }
+            $approve->close();
+        }
+    }
+
     $completed = pp_set_transaction_byid(
         $ppId,
-        BQR_DYNAMIC_SLUG,
-        'Bangla QR Dynamic',
+        $gatewaySlug,
+        $gatewayName,
         $sender,
         $trxid,
         'completed',
@@ -544,11 +588,6 @@ function bangla_qr_dynamic_match_sms($smsId, $conn = null, $prefix = null)
         return 'skipped';
     }
 
-    $settings = pp_get_plugin_setting(BQR_DYNAMIC_SLUG);
-    if (!is_array($settings) || strtolower((string) ($settings['auto_verify'] ?? 'enable')) !== 'enable') {
-        return 'skipped';
-    }
-
     $trxid = trim((string) $row['transaction_id']);
     // "--" is the placeholder for "this message had no transaction id", which
     // is not a usable reference.
@@ -563,29 +602,14 @@ function bangla_qr_dynamic_match_sms($smsId, $conn = null, $prefix = null)
     }
     $payable = number_format((float) str_replace(',', '', $amount), 2, '.', '');
 
-    // A bank message is parked as "review" because the sender can be forged.
-    // An exact match against a live reservation is the stronger signal here:
-    // that figure was issued moments ago to one specific checkout.
-    if ((string) $row['status'] === 'review') {
-        $approve = $conn->prepare("UPDATE `{$prefix}sms_data` SET status = 'approved' WHERE id = ? AND status = 'review'");
-        if ($approve) {
-            $approve->bind_param('i', $smsId);
-            try {
-                $approve->execute();
-            } catch (Throwable $e) {
-                // Leave it in review; the admin can still approve it by hand.
-            }
-            $approve->close();
-        }
-    }
-
     return bangla_qr_dynamic_complete_by_amount(
         $conn,
         $prefix,
         $payable,
         $smsId,
         (string) $row['mobile_number'],
-        $trxid
+        $trxid,
+        (string) $row['status']
     );
 }
 

@@ -1413,7 +1413,52 @@ function deleteData($tableName, $condition) {
     
         return [];
     }
-    
+
+    // ---- Gateway copies --------------------------------------------------------
+    // A copy is its own row in the plugins table (its own slug, name and settings)
+    // that runs the code of the gateway it was made from. Its settings carry
+    // "_copy_of" with that gateway's slug; nothing else marks it, so the checkout
+    // list, transactions and settings treat it like any other gateway.
+
+    // The folder whose code runs this gateway: the original for a copy, itself otherwise.
+    function pp_gateway_code_slug($slug) {
+        $slug = (string) $slug;
+        $settings = pp_get_plugin_setting($slug, false);
+        $copyOf = is_array($settings) ? (string) ($settings['_copy_of'] ?? '') : '';
+        return ($copyOf !== '' && preg_match('/^[a-z0-9-]{1,64}$/', $copyOf)) ? $copyOf : $slug;
+    }
+
+    // The slug a gateway's code should read its settings and record payments under.
+    // Set while a gateway page runs; $default is the gateway's own folder name.
+    function pp_current_gateway_slug($default) {
+        $current = $GLOBALS['pp_current_gateway_slug'] ?? '';
+        return (is_string($current) && $current !== '') ? $current : $default;
+    }
+
+    // Copies are only offered for gateways whose code reads pp_current_gateway_slug().
+    // Such a gateway defines <slug>_supports_copies() in its -class.php.
+    function pp_gateway_supports_copies($codeSlug) {
+        return function_exists(str_replace('-', '_', (string) $codeSlug) . '_supports_copies');
+    }
+
+    // Copies of one gateway, oldest first: [slug => display name].
+    function pp_gateway_copies($codeSlug) {
+        global $db_prefix;
+        $copies = [];
+        $response = json_decode(getData($db_prefix.'plugins', 'WHERE plugin_dir="payment-gateway" ORDER BY id ASC'), true);
+        if (($response['status'] ?? false) !== true) {
+            return $copies;
+        }
+        foreach ($response['response'] as $row) {
+            $settings = json_decode($row['plugin_array'] ?? '', true);
+            if (is_array($settings) && ($settings['_copy_of'] ?? '') === $codeSlug) {
+                $name = trim((string) ($settings['display_name'] ?? ''));
+                $copies[$row['plugin_slug']] = $name !== '' ? $name : (string) $row['plugin_name'];
+            }
+        }
+        return $copies;
+    }
+
     // Transactions store the gateway's internal name. Customers see its Display name, read
     // when shown so renaming a gateway also updates payments already made.
     function pp_gateway_display_name($transaction) {
@@ -1569,6 +1614,13 @@ function deleteData($tableName, $condition) {
         if($response['status'] == true){
             foreach($response['response'] as $row){
                 $slug = $row['plugin_slug'];
+                // A gateway copy has no folder of its own: load its original's hooks,
+                // so they run even when only the copy is active.
+                $rowSettings = json_decode($row['plugin_array'] ?? '', true);
+                $copyOf = is_array($rowSettings) ? (string) ($rowSettings['_copy_of'] ?? '') : '';
+                if ($copyOf !== '' && preg_match('/^[a-z0-9-]{1,64}$/', $copyOf)) {
+                    $slug = $copyOf;
+                }
                 $pluginFunctions = __DIR__ . "/../pp-content/plugins/{$row['plugin_dir']}/{$slug}/functions.php";
                 if (file_exists($pluginFunctions)) {
                     include_once $pluginFunctions;
@@ -1652,17 +1704,20 @@ function deleteData($tableName, $condition) {
                 return;
             }
 
-            $path = __DIR__ . "/../pp-content/plugins/".$res_plugins['response'][0]['plugin_dir']."/".$res_plugins['response'][0]['plugin_slug']. "/" . $res_plugins['response'][0]['plugin_slug'].'-class.php';
+            // A copy runs its original's code, told which slug it is running as.
+            $codeSlug = pp_gateway_code_slug($res_plugins['response'][0]['plugin_slug']);
+            $path = __DIR__ . "/../pp-content/plugins/".$res_plugins['response'][0]['plugin_dir']."/".$codeSlug. "/" . $codeSlug.'-class.php';
             if (file_exists($path)) {
-                include $path;
-                
-                $function = str_replace('-', '_', $res_plugins['response'][0]['plugin_slug']) . '_checkout_page';
+                include_once $path;
+
+                $function = str_replace('-', '_', $codeSlug) . '_checkout_page';
                 if (function_exists($function)) {
                     $GLOBALS['pp_current_gateway_payment_id'] = $payment_id;
+                    $GLOBALS['pp_current_gateway_slug'] = $res_plugins['response'][0]['plugin_slug'];
                     try {
                         call_user_func($function, $payment_id);
                     } finally {
-                        unset($GLOBALS['pp_current_gateway_payment_id']);
+                        unset($GLOBALS['pp_current_gateway_payment_id'], $GLOBALS['pp_current_gateway_slug']);
                     }
                 }
             } else {
@@ -2233,7 +2288,9 @@ function deleteData($tableName, $condition) {
             $reason = 'Max. '.(floor($maxVal) == $maxVal ? number_format($maxVal, 0) : number_format($maxVal, 2)).' '.$payableCurrency;
         }
 
-        $logoPath = __DIR__ . '/../pp-content/plugins/'.$plugin['plugin_dir'].'/'.$plugin['plugin_slug'].'/assets/icon.png';
+        // A copy shows its original's icon.
+        $iconSlug = pp_gateway_code_slug($plugin['plugin_slug']);
+        $logoPath = __DIR__ . '/../pp-content/plugins/'.$plugin['plugin_dir'].'/'.$iconSlug.'/assets/icon.png';
         if (!file_exists($logoPath)) {
             $isAvailable = false;
             $reason = 'Gateway icon is missing';
@@ -2242,7 +2299,7 @@ function deleteData($tableName, $condition) {
         return [
             'plugin_name' => $plugin_setting['display_name'] ?? $plugin['plugin_name'] ?? $plugin['plugin_slug'],
             'plugin_slug' => $plugin['plugin_slug'],
-            'plugin_logo' => 'https://'.$_SERVER['HTTP_HOST'].'/pp-content/plugins/'.$plugin['plugin_dir'].'/'.$plugin['plugin_slug'].'/assets/icon.png'.pp_asset_version($logoPath),
+            'plugin_logo' => 'https://'.$_SERVER['HTTP_HOST'].'/pp-content/plugins/'.$plugin['plugin_dir'].'/'.$iconSlug.'/assets/icon.png'.pp_asset_version($logoPath),
             'fixed_charge' => safeNumber($plugin_setting['fixed_charge'] ?? 0),
             'percent_charge' => safeNumber($plugin_setting['percent_charge'] ?? 0),
             'currency' => $payableCurrency ?: $gatewayCurrency,

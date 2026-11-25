@@ -54,19 +54,106 @@
             exit("Invalid plugin path.");
         }
         
-        $pluginPath = __DIR__ . "/../../pp-content/plugins/{$mainFolder}/{$pluginFolder}";
-        $classFile = "{$pluginPath}/{$pluginFolder}-class.php";
-        
+        // A gateway copy has no folder: it uses its original's code and admin page,
+        // told which slug it is editing.
+        $codeFolder = $mainFolder === 'payment-gateway' ? pp_gateway_code_slug($pluginFolder) : $pluginFolder;
+        $isGatewayCopy = $codeFolder !== $pluginFolder;
+
+        $pluginPath = __DIR__ . "/../../pp-content/plugins/{$mainFolder}/{$codeFolder}";
+        $classFile = "{$pluginPath}/{$codeFolder}-class.php";
+
         if (!file_exists($classFile)) {
             exit("Plugin main file not found.");
         }
-        
+
         require_once $classFile;
-        
+
         // Expected admin function: plugin-folder name + _admin_page
-        $function = str_replace('-', '_', $pluginFolder) . '_admin_page';
+        $function = str_replace('-', '_', $codeFolder) . '_admin_page';
         if (function_exists($function)) {
+            $GLOBALS['pp_current_gateway_slug'] = $pluginFolder;
             call_user_func($function);
+            unset($GLOBALS['pp_current_gateway_slug']);
+            if ($mainFolder === 'payment-gateway' && pp_gateway_supports_copies($codeFolder)) {
+                $copyActionsJson = json_encode([
+                    'slug' => $pluginFolder,
+                    'original' => $codeFolder,
+                    'isCopy' => $isGatewayCopy,
+                ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+                ?>
+                <div class="row justify-content-center mt-4">
+                  <div class="col-lg-8">
+                    <div class="card">
+                      <div class="card-header">
+                        <h2 class="card-title h4">Gateway Copies</h2>
+                      </div>
+                      <div class="card-body">
+                        <p class="text-secondary mb-3">
+                          <?php if ($isGatewayCopy): ?>
+                            This is a copy. It shows in the checkout list as its own gateway, with its own name and settings.
+                          <?php else: ?>
+                            Make a copy to show this gateway twice in the checkout list, for example with a second number or QR. Each copy has its own name and settings.
+                          <?php endif; ?>
+                        </p>
+                        <div id="ppGatewayCopyResponse"></div>
+                        <button type="button" class="btn btn-outline-primary" id="ppGatewayDuplicate"><i class="bi bi-copy"></i>&nbsp; Duplicate this gateway</button>
+                        <?php if ($isGatewayCopy): ?>
+                          <button type="button" class="btn btn-outline-danger ms-2" id="ppGatewayDeleteCopy"><i class="bi bi-trash"></i>&nbsp; Delete this copy</button>
+                        <?php endif; ?>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <script>
+                    (function () {
+                        var copy = <?php echo $copyActionsJson; ?>;
+                        var box = $('#ppGatewayCopyResponse');
+
+                        function send(action, button, done) {
+                            var original = button.innerHTML;
+                            button.disabled = true;
+                            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+                            $.ajax({
+                                url: '',
+                                type: 'POST',
+                                data: { action: action, plugin_slug: copy.slug },
+                                dataType: 'json',
+                                success: function (response) {
+                                    button.disabled = false;
+                                    button.innerHTML = original;
+                                    if (response.status) {
+                                        done(response);
+                                    } else {
+                                        box.attr('class', 'alert alert-danger mb-3').text(response.message || 'Something went wrong.');
+                                    }
+                                },
+                                error: function (xhr) {
+                                    button.disabled = false;
+                                    button.innerHTML = original;
+                                    box.attr('class', 'alert alert-danger mb-3').text('Request failed' + (xhr && xhr.status ? ' (HTTP ' + xhr.status + ')' : '') + '.');
+                                }
+                            });
+                        }
+
+                        $('#ppGatewayDuplicate').on('click', function () {
+                            send('gateway_copy-create', this, function (response) {
+                                // A full load, so the new copy also appears in the menu.
+                                location.href = '/admin/plugin-loader?page=payment-gateway--' + encodeURIComponent(response.slug);
+                            });
+                        });
+
+                        $('#ppGatewayDeleteCopy').on('click', function () {
+                            if (!confirm('Delete this copy? It disappears from the checkout list. Past payments made through it are kept.')) {
+                                return;
+                            }
+                            send('gateway_copy-delete', this, function () {
+                                location.href = '/admin/plugin-loader?page=payment-gateway--' + encodeURIComponent(copy.original);
+                            });
+                        });
+                    })();
+                </script>
+                <?php
+            }
             if ($mainFolder === 'payment-gateway') {
                 $settings = pp_get_plugin_setting($pluginFolder, false);
                 $gatewayCurrency = pp_normalize_currency_code($settings['currency'] ?? '');

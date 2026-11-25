@@ -4,7 +4,8 @@ if (!defined('pp_allowed_access')) {
     die('Direct access not allowed');
 }
 
-$plugin_slug = 'bangla-qr-dynamic';
+// A copy of this gateway runs this same code under its own slug and settings.
+$plugin_slug = pp_current_gateway_slug(BQR_DYNAMIC_SLUG);
 $plugin_info = pp_get_plugin_info($plugin_slug);
 $settings = pp_get_plugin_setting($plugin_slug);
 $settings = is_array($settings) ? $settings : array();
@@ -89,7 +90,7 @@ $currency_code = strtoupper((string) ($payment['currency'] ?? ($settings['curren
 $qr_minutes = bangla_qr_dynamic_setting_int($settings, 'qr_lifetime_minutes', 3, 1, 30);
 $grace_minutes = bangla_qr_dynamic_setting_int($settings, 'match_grace_minutes', 2, 1, 60);
 $cooldown_minutes = bangla_qr_dynamic_setting_int($settings, 'reuse_cooldown_minutes', 10, 2, 120);
-$claim = bangla_qr_dynamic_claim_amount($payment_id, $payable, $qr_minutes * 60, $grace_minutes * 60, $cooldown_minutes * 60);
+$claim = bangla_qr_dynamic_claim_amount($payment_id, $payable, $qr_minutes * 60, $grace_minutes * 60, $cooldown_minutes * 60, null, null, $plugin_slug);
 
 $amount_locked = ($claim['ok'] ?? false) === true;
 $amount_degraded = ($claim['degraded'] ?? false) === true;
@@ -145,9 +146,9 @@ if (($built['ok'] ?? false) === true) {
 $encoded_amount = $built['ok'] ? (bqr_parse_emv($built['payload'])['fields']['amount'] ?? '') : '';
 $display_amount = number_format($payable, 2, '.', '');
 $qr_download_name = 'bangla-qr-' . preg_replace('/[^0-9.]/', '', $display_amount) . '.png';
-$logo = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_dir'] ?? 'payment-gateway') . '/' . $plugin_slug . '/assets/icon.png';
+$logo = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_dir'] ?? 'payment-gateway') . '/' . BQR_DYNAMIC_SLUG . '/assets/icon.png';
 $status_url = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_dir'] ?? 'payment-gateway') . '/'
-    . $plugin_slug . '/status.php?id=' . rawurlencode((string) $payment_id);
+    . BQR_DYNAMIC_SLUG . '/status.php?id=' . rawurlencode((string) $payment_id);
 $site_name = (string) ($setting['response'][0]['site_name'] ?? '');
 ?>
 <!DOCTYPE html>

@@ -27,6 +27,19 @@ require_once __DIR__ . '/lib/bangla-qr-amounts.php';
 require_once __DIR__ . '/bangla-qr-dynamic-helpers.php';
 require_once __DIR__ . '/functions.php';
 
+if (!function_exists('bangla_qr_dynamic_supports_copies')) {
+    /**
+     * This gateway reads its settings through pp_current_gateway_slug(), so the
+     * admin can make copies of it (a second merchant QR as its own checkout entry).
+     *
+     * @return bool
+     */
+    function bangla_qr_dynamic_supports_copies()
+    {
+        return true;
+    }
+}
+
 if (!function_exists('bangla_qr_dynamic_admin_page')) {
     /**
      * Admin settings screen for the gateway.

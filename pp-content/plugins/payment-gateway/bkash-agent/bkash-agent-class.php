@@ -14,6 +14,12 @@ $plugin_meta = [
     'Requires PHP'      => ''
 ];
 
+// The views read their slug through pp_current_gateway_slug(), so the admin can
+// make copies of this gateway (a second agent number as its own checkout entry).
+function bkash_agent_supports_copies() {
+    return true;
+}
+
 // Load the admin UI rendering function
 function bkash_agent_admin_page() {
     $viewFile = __DIR__ . '/views/admin-ui.php';

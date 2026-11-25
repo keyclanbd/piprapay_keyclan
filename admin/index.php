@@ -420,7 +420,21 @@
                     $mainFolders = array_filter(scandir($baseDir), function($item) use ($baseDir) {
                         return $item !== '.' && $item !== '..' && is_dir($baseDir . DIRECTORY_SEPARATOR . $item);
                     });
-                    
+
+                    // Gateway copies, read once: [original slug => [copy slug => name]].
+                    $gatewayCopiesByOriginal = [];
+                    $copyRows = json_decode(getData($db_prefix.'plugins', 'WHERE plugin_dir="payment-gateway" AND status="active" ORDER BY id ASC'), true);
+                    if (($copyRows['status'] ?? false) === true) {
+                        foreach ($copyRows['response'] as $copyRow) {
+                            $copySettings = json_decode($copyRow['plugin_array'] ?? '', true);
+                            $copyOf = is_array($copySettings) ? (string) ($copySettings['_copy_of'] ?? '') : '';
+                            if ($copyOf !== '') {
+                                $copyName = trim((string) ($copySettings['display_name'] ?? ''));
+                                $gatewayCopiesByOriginal[$copyOf][$copyRow['plugin_slug']] = $copyName !== '' ? $copyName : (string) $copyRow['plugin_name'];
+                            }
+                        }
+                    }
+
                     foreach ($mainFolders as $mainFolder) {
                         $mainFolder_rand = random_int(100000, 999999);
                 ?>
@@ -455,6 +469,14 @@
                                                 $pluginInfo = parsePluginHeader($mainFile);
                                 ?>
                                                 <a class="nav-link" href="javascript:void(0);" onclick="load_content('<?php echo htmlspecialchars($pluginInfo['Plugin Name'] ?? '')?>','plugin-loader?page=<?php echo $mainFolder.'--'.htmlspecialchars($pluginFolder)?>','nav-btn-more-<?php echo $mainFolder.$mainFolder_rand?>')"><?php echo htmlspecialchars($pluginInfo['Plugin Name'] ?? '')?></a>
+                                <?php
+                                            }
+
+                                            // Gateway copies have no folder of their own; list each under its original.
+                                            foreach (($gatewayCopiesByOriginal[$pluginFolder] ?? []) as $copySlug => $copyName) {
+                                                $foundPlugins = true;
+                                ?>
+                                                <a class="nav-link" href="javascript:void(0);" onclick="load_content(<?php echo htmlspecialchars(json_encode($copyName), ENT_QUOTES)?>,'plugin-loader?page=<?php echo $mainFolder.'--'.htmlspecialchars($copySlug)?>','nav-btn-more-<?php echo $mainFolder.$mainFolder_rand?>')"><?php echo htmlspecialchars($copyName)?></a>
                                 <?php
                                             }
                                         }

@@ -4,7 +4,8 @@ if (!defined('pp_allowed_access')) {
     die('Direct access not allowed');
 }
 
-$plugin_slug = 'bangla-qr-dynamic';
+// A copy of this gateway runs this same code under its own slug and settings.
+$plugin_slug = pp_current_gateway_slug(BQR_DYNAMIC_SLUG);
 $plugin_info = pp_get_plugin_info($plugin_slug);
 $settings = pp_get_plugin_setting($plugin_slug);
 $settings = is_array($settings) ? $settings : array();
@@ -18,7 +19,7 @@ $gateway_currency = (string) ($settings['currency'] ?? 'BDT');
 $currency_mismatch = $merchant_currency !== ''
     && bangla_qr_dynamic_currency_numeric($gateway_currency) !== ''
     && bangla_qr_dynamic_currency_numeric($gateway_currency) !== $merchant_currency;
-$logo_url = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_dir'] ?? 'payment-gateway') . '/' . $plugin_slug . '/assets/icon.png';
+$logo_url = pp_get_site_url() . '/pp-content/plugins/' . ($plugin_info['plugin_dir'] ?? 'payment-gateway') . '/' . BQR_DYNAMIC_SLUG . '/assets/icon.png';
 ?>
 <form id="bqdSettingsForm" method="post" action="" enctype="multipart/form-data">
     <div class="page-header">

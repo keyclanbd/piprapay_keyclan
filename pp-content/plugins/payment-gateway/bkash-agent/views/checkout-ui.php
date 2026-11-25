@@ -1,7 +1,8 @@
 <?php
     $transaction_details = pp_get_transation($payment_id);
     $setting = pp_get_settings();
-    $plugin_slug = 'bkash-agent';
+    // A copy of this gateway runs this same code under its own slug and settings.
+    $plugin_slug = pp_current_gateway_slug('bkash-agent');
     $plugin_info = pp_get_plugin_info($plugin_slug);
     $settings = pp_get_plugin_setting($plugin_slug);
     $base_amount = convertToDefault($transaction_details['response'][0]['transaction_amount'], $transaction_details['response'][0]['transaction_currency'], $settings['currency']);
@@ -35,7 +36,7 @@
     $currency_symbols = ['BDT' => '৳', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'INR' => '₹', 'PKR' => '₨', 'AED' => 'د.إ', 'SAR' => '﷼', 'CAD' => 'C$', 'AUD' => 'A$', 'JPY' => '¥', 'CNY' => '¥'];
     $currency_symbol = $currency_symbols[strtoupper($settings['currency'])] ?? $settings['currency'];
     $amount = number_format($transaction_amount, 2).' '.$currency_symbol;
-    $logo = pp_get_site_url().'/pp-content/plugins/'.$plugin_info['plugin_dir'].'/'.$plugin_slug.'/assets/icon.png';
+    $logo = pp_get_site_url().'/pp-content/plugins/'.$plugin_info['plugin_dir'].'/bkash-agent/assets/icon.png';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -53,5 +54,5 @@
 <div class="form-area"><div class="field mobile-number-box" style="display:none"><label>Your bKash Number</label><div class="input-wrap"><i class="fa-solid fa-mobile-screen-button"></i><input class="input mobile-number" placeholder="01XXXXXXXXX"></div></div><div class="field"><label>Transaction ID</label><div class="input-wrap"><i class="fa-solid fa-hashtag"></i><input class="input transaction-id" placeholder="DGVXXXXX"></div></div><span class="response"></span><button class="btn-pay"><i class="fa-solid fa-shield-halved"></i>&nbsp; Verify</button></div></section><footer class="footer">Secure payment verification · Powered by <strong>KeyClan</strong></footer></main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script><script>
 function copyText(text,button){if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(function(){var original=button.innerHTML;button.innerHTML='<i class="fa-solid fa-check"></i>';button.disabled=true;setTimeout(function(){button.innerHTML=original;button.disabled=false},2000)})}}
-$('.btn-pay').on('click',function(){var btn=this,trxid=$('.transaction-id').val(),number=$('.mobile-number').val();if(!trxid){$('.response').text('Enter transaction ID').addClass('alert');return}btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i>';$.ajax({type:'POST',url:'<?php echo pp_get_paymentlink($payment_id)?>?method=bkash-agent',data:{'bkash-agent':'<?php echo $payment_id?>',trxid:trxid,number:number},success:function(data){btn.innerHTML='<i class="fa-solid fa-shield-halved"></i>&nbsp; Verify';var result=JSON.parse(data);if(result.status==='false'){if(result.numberbox==='true'){$('.mobile-number-box').show();$('.response').text('Enter mobile number').addClass('alert')}else $('.response').text(result.message || 'Request failed').addClass('alert')}else location.href='<?php echo pp_get_paymentlink($payment_id)?>'}})})
+$('.btn-pay').on('click',function(){var btn=this,trxid=$('.transaction-id').val(),number=$('.mobile-number').val();if(!trxid){$('.response').text('Enter transaction ID').addClass('alert');return}btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i>';$.ajax({type:'POST',url:'<?php echo pp_get_paymentlink($payment_id)?>?method=<?php echo rawurlencode($plugin_slug)?>',data:{'bkash-agent':'<?php echo $payment_id?>',trxid:trxid,number:number},success:function(data){btn.innerHTML='<i class="fa-solid fa-shield-halved"></i>&nbsp; Verify';var result=JSON.parse(data);if(result.status==='false'){if(result.numberbox==='true'){$('.mobile-number-box').show();$('.response').text('Enter mobile number').addClass('alert')}else $('.response').text(result.message || 'Request failed').addClass('alert')}else location.href='<?php echo pp_get_paymentlink($payment_id)?>'}})})
 </script><script>(function () { var btn = document.getElementById("pp-qr-dl"); var img = document.getElementById("pp-qr-img"); if (!btn || !img) return; btn.addEventListener("click", async function () { if (!img.src) return; try { var r = await fetch(img.src, { mode: "cors" }); var b = await r.blob(); var u = URL.createObjectURL(b); var a = document.createElement("a"); a.href = u; a.download = "payment-qr.png"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 4000); } catch (e) { var f = document.createElement("a"); f.href = img.src; f.download = "payment-qr.png"; f.target = "_blank"; f.rel = "noopener"; document.body.appendChild(f); f.click(); f.remove(); } }); })(); </script></body></html>

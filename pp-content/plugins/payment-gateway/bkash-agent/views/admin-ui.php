@@ -1,5 +1,6 @@
 <?php
-    $plugin_slug = 'bkash-agent';
+    // A copy of this gateway runs this same code under its own slug and settings.
+    $plugin_slug = pp_current_gateway_slug('bkash-agent');
     $plugin_info = pp_get_plugin_info($plugin_slug);
     $settings = pp_get_plugin_setting($plugin_slug);
 ?>
