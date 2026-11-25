@@ -37,6 +37,10 @@
     }
     
     if(isset($global_user_login) && $global_user_login == true){
+        // The payment methods are the ones the SMS parser stores, so a bank such as
+        // Al-Arafah Bank shows as itself instead of falling back to the first option.
+        require_once __DIR__ . '/../pp-sms-parser.php';
+        $smsPaymentMethods = array_values(array_unique(pp_sms_provider_senders()));
 ?>
           <!-- Page Header -->
           <div class="page-header">
@@ -256,14 +260,9 @@
                   <!-- Select -->
                   <div class="tom-select-custom tom-select-custom-end">
                     <select id="new-sms-data-payment-method" class="form-select form-select-sm">
-                      <option value="bKash" selected>bKash</option>
-                      <option value="Nagad">Nagad</option>
-                      <option value="Rocket">Rocket</option>
-                      <option value="Upay">Upay</option>
-                      <option value="Tap">Tap</option>
-                      <option value="OkWallet">OkWallet</option>
-                      <option value="Cellfin">Cellfin</option>
-                      <option value="Ipay">Ipay</option>
+                      <?php foreach ($smsPaymentMethods as $smsMethod): ?>
+                        <option value="<?php echo htmlspecialchars($smsMethod); ?>"<?php echo $smsMethod === 'bKash' ? ' selected' : ''; ?>><?php echo htmlspecialchars($smsMethod); ?></option>
+                      <?php endforeach; ?>
                     </select>
                   </div>
                   <!-- End Select -->
@@ -310,6 +309,20 @@
         
         
       <script>
+                // Options for the edit form's payment method. A stored value that is
+                // not in the list is kept as an option, so saving never changes it.
+                var smsPaymentMethods = <?php echo json_encode($smsPaymentMethods, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+                function smsMethodOptions(current) {
+                    var methods = smsPaymentMethods.slice();
+                    if (current && current !== '--' && methods.indexOf(current) === -1) {
+                        methods.push(current);
+                    }
+                    return methods.map(function (method) {
+                        var safe = $('<div>').text(method).html().replace(/"/g, '&quot;');
+                        return '<option value="' + safe + '"' + (method === current ? ' selected' : '') + '>' + safe + '</option>';
+                    }).join('');
+                }
+
                 function initialize111() {
                     new HSFormSearch('.js-form-search')
             
@@ -469,14 +482,7 @@
                                       <!-- Select -->
                                       <div class="tom-select-custom tom-select-custom-end">
                                         <select id="new-sms-data-payment-method${tx.id}" class="form-select form-select-sm">
-                                          <option value="bKash" ${tx.payment_method === 'bKash' ? 'selected' : ''}>bKash</option>
-                                          <option value="Nagad" ${tx.payment_method === 'Nagad' ? 'selected' : ''}>Nagad</option>
-                                          <option value="Rocket" ${tx.payment_method === 'Rocket' ? 'selected' : ''}>Rocket</option>
-                                          <option value="Upay" ${tx.payment_method === 'Upay' ? 'selected' : ''}>Upay</option>
-                                          <option value="Tap" ${tx.payment_method === 'Tap' ? 'selected' : ''}>Tap</option>
-                                          <option value="OkWallet" ${tx.payment_method === 'OkWallet' ? 'selected' : ''}>OkWallet</option>
-                                          <option value="Cellfin" ${tx.payment_method === 'Cellfin' ? 'selected' : ''}>Cellfin</option>
-                                          <option value="Ipay" ${tx.payment_method === 'Ipay' ? 'selected' : ''}>Ipay</option>
+                                          ${smsMethodOptions(tx.payment_method)}
                                         </select>
                                       </div>
                                       <!-- End Select -->
